@@ -110,6 +110,7 @@ import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_AC
 import static org.apache.ignite.cache.CacheAtomicWriteOrderMode.CLOCK;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
 import static org.apache.ignite.internal.GridTopic.TOPIC_CACHE;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.DELETE;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.TRANSFORM;
@@ -210,18 +211,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         updateReplyClos = new CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse>() {
             @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
             @Override public void apply(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
-//                if (ctx.config().getAtomicWriteOrderMode() == CLOCK) {
-//                    assert req.writeSynchronizationMode() != FULL_ASYNC : req;
-//
-//                    // Always send reply in CLOCK ordering mode.
-//                    sendNearUpdateReply(res.nodeId(), res);
-//
-//                    return;
-//                }
-//
-//                // Request should be for primary keys only in PRIMARY ordering mode.
-//                assert req.hasPrimary() : req;
-
                 if (req.writeSynchronizationMode() != FULL_ASYNC)
                     sendNearUpdateReply(res.nodeId(), res);
                 else {
@@ -1970,9 +1959,10 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         }
         else {
             // If there are backups, map backup update future.
-            if (dhtFut != null)
+            if (dhtFut != null) {
                 dhtFut.map(res.returnValue());
                 // Otherwise, complete the call.
+            }
             else
                 completionCb.apply(req, res);
         }

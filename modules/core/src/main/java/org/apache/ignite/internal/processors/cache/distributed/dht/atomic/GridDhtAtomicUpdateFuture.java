@@ -112,7 +112,7 @@ class GridDhtAtomicUpdateFuture extends GridDhtAtomicAbstractUpdateFuture {
             }
         }
 
-        registerResponse(nodeId);
+        registerResponse(nodeId, false);
     }
 
     /** {@inheritDoc} */
