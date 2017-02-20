@@ -31,7 +31,8 @@ import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemTy
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 
-import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.*;
+import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
+import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_RESULT_SUCCESS_MASK;
 
 /**
  * TODO IGNITE-4705: no not send mapping if it == affinity?
@@ -48,6 +49,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** */
     private long futId;
+
+    /** */
+    private UUID primaryId;
 
     /** */
     @GridDirectCollection(UUID.class)
@@ -68,16 +72,26 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /**
      * @param cacheId Cache ID.
+     * @param partId Partition.
      * @param futId Future ID.
+     * @param primaryId Primary node ID.
      * @param mapping Update mapping.
      * @param flags Flags.
      */
-    public GridDhtAtomicNearResponse(int cacheId, int partId, long futId, List<UUID> mapping, byte flags) {
+    public GridDhtAtomicNearResponse(int cacheId, int partId, long futId, UUID primaryId, List<UUID> mapping, byte flags) {
         this.cacheId = cacheId;
         this.partId = partId;
         this.futId = futId;
+        this.primaryId = primaryId;
         this.mapping = mapping;
         this.flags = flags;
+    }
+
+    /**
+     * @return Primary node ID.
+     */
+    public UUID primaryId() {
+        return primaryId;
     }
 
     /** {@inheritDoc} */
@@ -156,7 +170,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 8;
+        return 9;
     }
 
     /** {@inheritDoc} */
@@ -225,6 +239,12 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 writer.incrementState();
 
+            case 8:
+                if (!writer.writeUuid("primaryId", primaryId))
+                    return false;
+
+                writer.incrementState();
+
         }
 
         return true;
@@ -275,6 +295,14 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
             case 7:
                 partId = reader.readInt("partId");
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 8:
+                primaryId = reader.readUuid("primaryId");
 
                 if (!reader.isLastRead())
                     return false;

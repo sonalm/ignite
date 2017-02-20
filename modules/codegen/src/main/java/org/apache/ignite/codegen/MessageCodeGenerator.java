@@ -183,21 +183,21 @@ public class MessageCodeGenerator {
 
 //        gen.generateAll(true);
 
-        gen.generateAndWrite(UpdateErrors.class);
-        gen.generateAndWrite(GridDhtAtomicNearResponse.class);
-        //gen.generateAndWrite(GridNearAtomicAbstractUpdateRequest.class);
-        gen.generateAndWrite(GridDhtAtomicAbstractUpdateRequest.class);
-        gen.generateAndWrite(GridNearAtomicAbstractSingleUpdateRequest.class);
         gen.generateAndWrite(GridDhtAtomicDeferredUpdateResponse.class);
-        gen.generateAndWrite(GridDhtAtomicSingleUpdateRequest.class);
-        gen.generateAndWrite(GridDhtAtomicUpdateRequest.class);
-        gen.generateAndWrite(GridDhtAtomicUpdateResponse.class);
-        gen.generateAndWrite(GridNearAtomicFullUpdateRequest.class);
-        gen.generateAndWrite(GridNearAtomicSingleUpdateFilterRequest.class);
-        gen.generateAndWrite(GridNearAtomicSingleUpdateInvokeRequest.class);
-        gen.generateAndWrite(GridNearAtomicSingleUpdateRequest.class);
-        gen.generateAndWrite(GridNearAtomicUpdateResponse.class);
-        gen.generateAndWrite(GridNearAtomicMappingResponse.class);
+//        gen.generateAndWrite(UpdateErrors.class);
+//        gen.generateAndWrite(GridDhtAtomicNearResponse.class);
+//        gen.generateAndWrite(GridDhtAtomicAbstractUpdateRequest.class);
+//        gen.generateAndWrite(GridNearAtomicAbstractSingleUpdateRequest.class);
+//        gen.generateAndWrite(GridDhtAtomicSingleUpdateRequest.class);
+//        gen.generateAndWrite(GridDhtAtomicUpdateRequest.class);
+//        gen.generateAndWrite(GridDhtAtomicUpdateResponse.class);
+//        gen.generateAndWrite(GridNearAtomicFullUpdateRequest.class);
+//        gen.generateAndWrite(GridNearAtomicSingleUpdateFilterRequest.class);
+//        gen.generateAndWrite(GridNearAtomicSingleUpdateInvokeRequest.class);
+//        gen.generateAndWrite(GridNearAtomicSingleUpdateRequest.class);
+//        gen.generateAndWrite(GridNearAtomicUpdateResponse.class);
+//        gen.generateAndWrite(GridNearAtomicMappingResponse.class);
+        //gen.generateAndWrite(GridNearAtomicAbstractUpdateRequest.class);
 
 //        gen.generateAndWrite(GridMessageCollection.class);
 //        gen.generateAndWrite(DataStreamerEntry.class);

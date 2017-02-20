@@ -18,6 +18,8 @@
 package org.apache.ignite.internal.util.nio;
 
 import org.apache.ignite.IgniteCheckedException;
+import org.apache.ignite.IgniteException;
+import org.apache.ignite.lang.IgniteInClosure;
 
 /**
  * This interface defines the general element in transformation chain between the nio server and
@@ -112,7 +114,8 @@ public interface GridNioFilter {
     public GridNioFuture<?> proceedSessionWrite(
         GridNioSession ses,
         Object msg,
-        boolean fut
+        boolean fut,
+        IgniteInClosure<IgniteException> ackC
     ) throws IgniteCheckedException;
 
     /**
@@ -158,7 +161,10 @@ public interface GridNioFilter {
      * @return Write future or {@code null}.
      * @throws GridNioException If GridNioException occurred while handling event.
      */
-    public GridNioFuture<?> onSessionWrite(GridNioSession ses, Object msg, boolean fut) throws IgniteCheckedException;
+    public GridNioFuture<?> onSessionWrite(GridNioSession ses,
+        Object msg,
+        boolean fut,
+        IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException;
 
     /**
      * Invoked when a new messages received.

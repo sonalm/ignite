@@ -17,6 +17,10 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.cache.expiry.ExpiryPolicy;
@@ -32,8 +36,8 @@ import org.apache.ignite.internal.processors.cache.GridCacheMvccManager;
 import org.apache.ignite.internal.processors.cache.GridCacheOperation;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
-import org.apache.ignite.internal.util.typedef.CI2;
 import org.apache.ignite.internal.util.typedef.internal.CU;
+import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteUuid;
 import org.jetbrains.annotations.Nullable;
@@ -123,9 +127,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
     /** Future ID. */
     protected Long futId;
-
-    /** Completion future for a particular topology version. */
-    protected GridFutureAdapter<Void> topCompleteFut;
 
     /** Operation result. */
     protected GridCacheReturn opRes;
@@ -245,7 +246,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @return {@code True} future is stored by {@link GridCacheMvccManager#addAtomicFuture}.
      */
     protected boolean storeFuture() {
-        return cctx.config().getAtomicWriteOrderMode() == CLOCK || syncMode != FULL_ASYNC;
+        return syncMode != FULL_ASYNC;
     }
 
     /**
@@ -259,7 +260,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             cache.updateAllAsyncInternal(nodeId, req,
                 new GridDhtAtomicCache.UpdateReplyClosure() {
                     @Override public void apply(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
-                        onResult(res.nodeId(), res, false);
+                        onPrimaryResponse(res.nodeId(), res, false);
                     }
                 });
         }
@@ -296,10 +297,18 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param res Update response.
      * @param nodeErr {@code True} if response was created on node failure.
      */
-    public abstract void onResult(UUID nodeId, GridNearAtomicUpdateResponse res, boolean nodeErr);
+    public abstract void onPrimaryResponse(UUID nodeId, GridNearAtomicUpdateResponse res, boolean nodeErr);
 
-    public abstract void onResult(UUID nodeId, GridDhtAtomicNearResponse res);
+    /**
+     * @param nodeId Node ID.
+     * @param res Response.
+     */
+    public abstract void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res);
 
+    /**
+     * @param nodeId Node ID.
+     * @param res Response.
+     */
     public abstract void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res);
 
     /**
@@ -315,7 +324,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             res.addFailedKeys(req.keys(), e);
 
-            onResult(req.nodeId(), res, true);
+            onPrimaryResponse(req.nodeId(), res, true);
         }
     }
 
@@ -341,5 +350,151 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             return null;
 
         return futId;
+    }
+
+    /**
+     *
+     */
+    static class PrimaryRequestState {
+        /** */
+        final GridNearAtomicAbstractUpdateRequest req;
+
+        /** */
+        private Set<UUID> rcvd;
+
+        /** */
+        private Set<UUID> mapping;
+
+        /** */
+        private boolean hasRes;
+
+        /**
+         * @param req Request.
+         */
+        PrimaryRequestState(GridNearAtomicAbstractUpdateRequest req) {
+            assert req != null && req.nodeId() != null : req;
+
+            this.req = req;
+        }
+
+        /**
+         * @param cctx Context.
+         * @param nodeIds DHT nodes.
+         */
+        void initMapping(GridCacheContext cctx, List<UUID> nodeIds) {
+            mapping = U.newHashSet(nodeIds.size());
+
+            for (UUID dhtNodeId : nodeIds) {
+                if (cctx.discovery().node(dhtNodeId) != null)
+                    mapping.add(dhtNodeId);
+            }
+
+            if (rcvd != null)
+                mapping.removeAll(rcvd);
+        }
+
+        /**
+         * @param nodeId Node ID.
+         * @return Request if need process primary response, {@code null} otherwise.
+         */
+        @Nullable GridNearAtomicAbstractUpdateRequest processPrimaryResponse(UUID nodeId) {
+            if (req != null && req.nodeId().equals(nodeId) && req.response() == null)
+                return req;
+
+            return null;
+        }
+
+        /**
+         * @param cctx Context.
+         * @param res Response.
+         * @return {@code True} if request processing finished.
+         */
+        boolean onMappingReceived(GridCacheContext cctx, GridNearAtomicMappingResponse res) {
+            if (mapping == null) {
+                initMapping(cctx, res.mapping());
+
+                if (mapping.isEmpty() && hasRes)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * @param nodeId Node ID.
+         * @return {@code True} if request processing finished.
+         */
+        boolean onNodeLeft(UUID nodeId) {
+            if (mapping != null && mapping.remove(nodeId)) {
+                if (mapping.isEmpty() && hasRes)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * TODO 4705: check response for errors.
+         *
+         * @param cctx Context.
+         * @param nodeId Node ID.
+         * @param res Response.
+         * @return {@code True} if request processing finished.
+         */
+        boolean onDhtResponse(GridCacheContext cctx, UUID nodeId, GridDhtAtomicNearResponse res) {
+            if (res.mapping() != null) {
+                // Mapping is sent from dht nodes.
+                if (mapping == null)
+                    initMapping(cctx, res.mapping());
+            }
+            else {
+                // Mapping and result are sent from primary.
+                if (mapping == null) {
+                    if (rcvd == null)
+                        rcvd = new HashSet<>();
+
+                    rcvd.add(nodeId);
+
+                    return false; // Need wait for response from primary.
+                }
+            }
+
+            mapping.remove(nodeId);
+
+            if (res.hasResult())
+                hasRes = true;
+
+            return mapping.isEmpty() && hasRes;
+        }
+
+        /**
+         * @param cctx Context.
+         * @param res Response.
+         * @return {@code True} if request processing finished.
+         */
+        boolean onPrimaryResponse(GridCacheContext cctx, GridNearAtomicUpdateResponse res) {
+            hasRes = true;
+
+            boolean onRes = req.onResponse(res);
+
+            assert onRes;
+
+            if (res.error() != null || res.remapKeys() != null)
+                return true;
+
+            assert res.returnValue() != null : res;
+
+            if (res.mapping() != null)
+                initMapping(cctx, res.mapping());
+            else
+                mapping = Collections.emptySet();
+
+            return mapping.isEmpty();
+        }
+
+        /** {@inheritDoc} */
+        @Override public String toString() {
+            return S.toString(PrimaryRequestState.class, this);
+        }
     }
 }

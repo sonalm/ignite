@@ -58,7 +58,6 @@ import org.apache.ignite.internal.processors.cache.GridCacheMapEntryFactory;
 import org.apache.ignite.internal.processors.cache.GridCacheOperation;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.GridCacheUpdateAtomicResult;
-import org.apache.ignite.internal.processors.cache.GridDeferredAckMessageSender;
 import org.apache.ignite.internal.processors.cache.IgniteCacheExpiryPolicy;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheAdapter;
@@ -81,6 +80,8 @@ import org.apache.ignite.internal.processors.cache.transactions.IgniteTxLocalEx;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersionConflictContext;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersionEx;
+import org.apache.ignite.internal.processors.timeout.GridTimeoutObject;
+import org.apache.ignite.internal.util.GridLongList;
 import org.apache.ignite.internal.util.GridUnsafe;
 import org.apache.ignite.internal.util.future.GridEmbeddedFuture;
 import org.apache.ignite.internal.util.future.GridFinishedFuture;
@@ -100,10 +101,10 @@ import org.apache.ignite.lang.IgniteBiTuple;
 import org.apache.ignite.lang.IgniteClosure;
 import org.apache.ignite.lang.IgniteInClosure;
 import org.apache.ignite.lang.IgniteOutClosure;
+import org.apache.ignite.lang.IgniteUuid;
 import org.apache.ignite.plugin.security.SecurityPermission;
 import org.apache.ignite.transactions.TransactionIsolation;
 import org.jetbrains.annotations.Nullable;
-import org.jsr166.ConcurrentLinkedDeque8;
 
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_BUFFER_SIZE;
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT;
@@ -137,14 +138,24 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         Integer.getInteger(IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT, 500);
 
     /** */
-    static final boolean IGNITE_ATOMIC_SND_MAPPING_TO_NEAR = IgniteSystemProperties.getBoolean("IGNITE_ATOMIC_SND_MAPPING_TO_NEAR", false);
+    static final boolean IGNITE_ATOMIC_SND_MAPPING_TO_NEAR =
+        IgniteSystemProperties.getBoolean("IGNITE_ATOMIC_SND_MAPPING_TO_NEAR", false);
+
+    /** */
+    private static final boolean IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK =
+        IgniteSystemProperties.getBoolean("IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK", false);
+
+    /** */
+    private final ThreadLocal<Map<UUID, GridDhtAtomicDeferredUpdateResponse>> defRes =
+        new ThreadLocal<Map<UUID, GridDhtAtomicDeferredUpdateResponse>>() {
+            @Override protected Map<UUID, GridDhtAtomicDeferredUpdateResponse> initialValue() {
+                return new HashMap<>();
+            }
+        };
 
     /** Update reply closure. */
     @GridToStringExclude
     private UpdateReplyClosure updateReplyClos;
-
-    /** Pending */
-    private GridDeferredAckMessageSender deferredUpdateMsgSnd;
 
     /** */
     private GridNearAtomicCache<K, V> near;
@@ -236,54 +247,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         // TODO IGNITE-4705.
         log.info("Atomic cache start [name=" + name() +
             ", mode=" + configuration().getWriteSynchronizationMode() +
-            ", IGNITE_ATOMIC_SND_MAPPING_TO_NEAR=" + IGNITE_ATOMIC_SND_MAPPING_TO_NEAR + ']');
-
-        deferredUpdateMsgSnd = new GridDeferredAckMessageSender<Long>(ctx.time(), ctx.closures()) {
-            @Override public int getTimeout() {
-                return DEFERRED_UPDATE_RESPONSE_TIMEOUT;
-            }
-
-            @Override public int getBufferSize() {
-                return DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE;
-            }
-
-            @Override public void finish(UUID nodeId, ConcurrentLinkedDeque8<Long> vers) {
-                GridDhtAtomicDeferredUpdateResponse msg = new GridDhtAtomicDeferredUpdateResponse(ctx.cacheId(),
-                    vers, ctx.deploymentEnabled());
-
-                try {
-                    ctx.kernalContext().gateway().readLock();
-
-                    try {
-                        ctx.io().send(nodeId, msg, ctx.ioPolicy());
-
-                        if (msgLog.isDebugEnabled()) {
-                            msgLog.debug("Sent deferred DHT update response [futIds=" + msg.futureIds() +
-                                ", node=" + nodeId + ']');
-                        }
-                    }
-                    finally {
-                        ctx.kernalContext().gateway().readUnlock();
-                    }
-                }
-                catch (IllegalStateException ignored) {
-                    if (msgLog.isDebugEnabled()) {
-                        msgLog.debug("Failed to send deferred DHT update response, node is stopping [" +
-                            "futIds=" + msg.futureIds() + ", node=" + nodeId + ']');
-                    }
-                }
-                catch (ClusterTopologyCheckedException ignored) {
-                    if (msgLog.isDebugEnabled()) {
-                        msgLog.debug("Failed to send deferred DHT update response, node left [" +
-                            "futIds=" + msg.futureIds() + ", node=" + nodeId + ']');
-                    }
-                }
-                catch (IgniteCheckedException e) {
-                    U.error(log, "Failed to send deferred DHT update response to remote node [" +
-                        "futIds=" + msg.futureIds() + ", node=" + nodeId + ']', e);
-                }
-            }
-        };
+            ", IGNITE_ATOMIC_SND_MAPPING_TO_NEAR=" + IGNITE_ATOMIC_SND_MAPPING_TO_NEAR +
+            ", IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK=" + IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK + ']');
 
         CacheMetricsImpl m = new CacheMetricsImpl(ctx);
 
@@ -476,7 +441,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
     /** {@inheritDoc} */
     @Override public void stop() {
-        deferredUpdateMsgSnd.stop();
+        // TODO 4705: need send deferred response?
     }
 
     /**
@@ -3220,7 +3185,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             (GridNearAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
 
         if (fut != null)
-            fut.onResult(nodeId, res, false);
+            fut.onPrimaryResponse(nodeId, res, false);
 
         else
             U.warn(msgLog, "Failed to find near update future for update response (will ignore) " +
@@ -3243,6 +3208,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             new GridDhtAtomicNearResponse(ctx.cacheId(),
                 req.partition(),
                 req.nearFutureId(),
+                nodeId,
                 req.dhtNodes(),
                 req.flags()) : null;
 
@@ -3349,19 +3315,17 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             dhtRes.nearEvicted(nearEvicted);
         }
 
-        final boolean RES_AFTER_ACK = false;
-
         if (nearRes != null) {
-            if (RES_AFTER_ACK)
+            if (IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK)
                 sendDhtNearResponse(nodeId, req, nearRes);
             else {
                 sendDhtNearResponse(null, req, nearRes);
 
-                sendDeferredUpdateResponse(nodeId, req.futureId());
+                sendDeferredUpdateResponse(req.partition(), nodeId, req.futureId());
             }
         }
         else
-            sendDeferredUpdateResponse(nodeId, req.futureId());
+            sendDeferredUpdateResponse(req.partition(), nodeId, req.futureId());
 
         if (dhtRes != null)
             sendDhtPrimaryResponse(nodeId, req, dhtRes);
@@ -3399,6 +3363,182 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     }
 
     /**
+     *
+     */
+    private class DeferredResponseClosure implements IgniteInClosure<IgniteException>, Runnable {
+        /** */
+        private final int part;
+
+        /** */
+        private final UUID primaryId;
+
+        /** */
+        private final long futId;
+
+        /**
+         * @param part Partition ID.
+         * @param primaryId Primary ID.
+         * @param futId Future ID.
+         */
+        DeferredResponseClosure(int part, UUID primaryId, long futId) {
+            this.part = part;
+            this.primaryId = primaryId;
+            this.futId = futId;
+        }
+
+        /** {@inheritDoc} */
+        @Override public void run() {
+            sendDeferredUpdateResponse(part, primaryId, futId);
+        }
+
+        /** {@inheritDoc} */
+        @Override public void apply(IgniteException e) {
+            ctx.kernalContext().getStripedExecutorService().execute(part, this);
+        }
+    }
+
+    /**
+     *
+     */
+    private class DeferredUpdateTimeout implements GridTimeoutObject, Runnable {
+        /** */
+        private final int part;
+
+        /** */
+        private final UUID primaryId;
+
+        /** */
+        private final IgniteUuid id;
+
+        /** */
+        private final long endTime;
+
+        /**
+         * @param part Partition.
+         * @param primaryId Primary ID.
+         */
+        DeferredUpdateTimeout(int part, UUID primaryId) {
+            this.part = part;
+            this.primaryId = primaryId;
+
+            endTime = U.currentTimeMillis() + DEFERRED_UPDATE_RESPONSE_TIMEOUT;
+
+            id = IgniteUuid.fromUuid(primaryId);
+        }
+
+        /** {@inheritDoc} */
+        @Override public IgniteUuid timeoutId() {
+            return id;
+        }
+
+        /** {@inheritDoc} */
+        @Override public long endTime() {
+            return endTime;
+        }
+
+        /** {@inheritDoc} */
+        @Override public void run() {
+            Map<UUID, GridDhtAtomicDeferredUpdateResponse> resMap = defRes.get();
+
+            GridDhtAtomicDeferredUpdateResponse msg = resMap.get(primaryId);
+
+            if (msg.timeoutSender() == this) {
+                msg.timeoutSender(null);
+
+                resMap.remove(primaryId);
+
+                sendDeferredUpdateResponse(primaryId, msg);
+            }
+        }
+
+        /** {@inheritDoc} */
+        @Override public void onTimeout() {
+            ctx.kernalContext().getStripedExecutorService().execute(part, this);
+        }
+    }
+
+    /**
+     * @param part Partition.
+     * @param primaryId Primary ID.
+     * @param futId Future ID.
+     */
+    private void sendDeferredUpdateResponse(int part, UUID primaryId, long futId) {
+        Map<UUID, GridDhtAtomicDeferredUpdateResponse> resMap = defRes.get();
+
+        GridDhtAtomicDeferredUpdateResponse msg = resMap.get(primaryId);
+
+        if (msg == null) {
+            msg = new GridDhtAtomicDeferredUpdateResponse(ctx.cacheId(),
+                new GridLongList(DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE));
+
+            if (DEFERRED_UPDATE_RESPONSE_TIMEOUT > 0) {
+                GridTimeoutObject timeoutSnd = new DeferredUpdateTimeout(part, primaryId);
+
+                msg.timeoutSender(timeoutSnd);
+
+                ctx.time().addTimeoutObject(timeoutSnd);
+            }
+
+            resMap.put(primaryId, msg);
+        }
+
+        GridLongList futIds = msg.futureIds();
+
+        assert futIds.size() < DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE : futIds.size();
+
+        futIds.add(futId);
+
+        if (futIds.size() == DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE) {
+            resMap.remove(primaryId);
+
+            sendDeferredUpdateResponse(primaryId, msg);
+        }
+    }
+
+    /**
+     * @param primaryId Primary ID.
+     * @param msg Message.
+     */
+    private void sendDeferredUpdateResponse(UUID primaryId, GridDhtAtomicDeferredUpdateResponse msg) {
+        try {
+            ctx.kernalContext().gateway().readLock();
+
+            GridTimeoutObject timeoutSnd = msg.timeoutSender();
+
+            if (timeoutSnd != null)
+                ctx.time().removeTimeoutObject(timeoutSnd);
+
+            try {
+                ctx.io().send(primaryId, msg, ctx.ioPolicy());
+
+                if (msgLog.isDebugEnabled()) {
+                    msgLog.debug("Sent deferred DHT update response [futIds=" + msg.futureIds() +
+                        ", node=" + primaryId + ']');
+                }
+            }
+            finally {
+                ctx.kernalContext().gateway().readUnlock();
+            }
+        }
+        catch (IllegalStateException ignored) {
+            if (msgLog.isDebugEnabled()) {
+                msgLog.debug("Failed to send deferred DHT update response, node is stopping [" +
+                    "futIds=" + msg.futureIds() + ", node=" + primaryId + ']');
+            }
+        }
+        catch (ClusterTopologyCheckedException ignored) {
+            if (msgLog.isDebugEnabled()) {
+                msgLog.debug("Failed to send deferred DHT update response, node left [" +
+                    "futIds=" + msg.futureIds() + ", node=" + primaryId + ']');
+            }
+        }
+        catch (IgniteCheckedException e) {
+            U.error(log, "Failed to send deferred DHT update response to remote node [" +
+                "futIds=" + msg.futureIds() + ", node=" + primaryId + ']', e);
+        }
+    }
+
+    /**
      * @param primaryId Primary node ID.
      * @param req Request.
      * @param nearRes Response to send.
@@ -3413,11 +3553,11 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 throw new ClusterTopologyCheckedException("Node left: " + req.nearNodeId());
 
             if (primaryId != null) {
-                ctx.gridIO().send(node, TOPIC_CACHE, nearRes, ctx.ioPolicy(), new IgniteInClosure<IgniteException>() {
-                    @Override public void apply(IgniteException e) {
-                        sendDeferredUpdateResponse(primaryId, req.futureId());
-                    }
-                });
+                ctx.gridIO().send(node,
+                    TOPIC_CACHE,
+                    nearRes,
+                    ctx.ioPolicy(),
+                    new DeferredResponseClosure(req.partition(), primaryId, req.futureId()));
             }
             else
                 ctx.gridIO().send(node, TOPIC_CACHE, nearRes, ctx.ioPolicy());
@@ -3440,14 +3580,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 ", node=" + req.nearNodeId() +
                 ", res=" + nearRes + ']', e);
         }
-    }
-
-    /**
-     * @param nodeId Node ID to send message to.
-     * @param futId ID to ack.
-     */
-    private void sendDeferredUpdateResponse(UUID nodeId, long futId) {
-        deferredUpdateMsgSnd.sendDeferredAckMessage(nodeId, futId);
     }
 
     /**
@@ -3489,7 +3621,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     ", node=" + nodeId + ']');
             }
 
-            updateFut.onResult(nodeId, res);
+            updateFut.onDhtResponse(nodeId, res);
         }
         else {
             U.warn(msgLog, "Failed to find update future DHT atomic near response [futId=" + res.futureId() +
@@ -3526,7 +3658,13 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     @SuppressWarnings("unchecked")
     private void processDhtAtomicDeferredUpdateResponse(UUID nodeId, GridDhtAtomicDeferredUpdateResponse res) {
-        for (Long id : res.futureIds()) {
+        GridLongList futIds = res.futureIds();
+
+        assert futIds != null && futIds.size() > 0 : futIds;
+
+        for (int i = 0; i < futIds.size(); i++) {
+            Long id = futIds.get(i);
+
             GridDhtAtomicAbstractUpdateFuture updateFut = (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(id);
 
             if (updateFut != null) {

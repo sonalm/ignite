@@ -65,11 +65,13 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
 
     /**
      * @return Flag indicating whether this is fast-map udpate.
+     * TODO IGNITE-4705
      */
     public abstract boolean fastMap();
 
     /**
      * @return Update version for fast-map request.
+     * TODO IGNITE-4705
      */
     public abstract GridCacheVersion updateVersion();
 
@@ -125,6 +127,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
 
     /**
      * @return Flag indicating whether this request contains primary keys.
+     * TODO IGNITE-4705
      */
     public abstract boolean hasPrimary();
 

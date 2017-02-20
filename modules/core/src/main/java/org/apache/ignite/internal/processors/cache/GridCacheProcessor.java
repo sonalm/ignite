@@ -856,7 +856,6 @@ public class GridCacheProcessor extends GridProcessorAdapter {
 
         if (!ctx.clientNode() && !ctx.isDaemon())
             addRemovedItemsCleanupTask(Long.getLong(IGNITE_CACHE_REMOVED_ENTRIES_TTL, 10_000));
-
     }
 
     /**
