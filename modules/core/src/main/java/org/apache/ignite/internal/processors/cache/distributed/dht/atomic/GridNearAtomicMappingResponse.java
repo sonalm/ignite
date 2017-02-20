@@ -17,76 +17,95 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
-import java.io.Externalizable;
 import java.nio.ByteBuffer;
-import java.util.Collection;
-import org.apache.ignite.IgniteLogger;
+import java.util.List;
+import java.util.UUID;
 import org.apache.ignite.internal.GridDirectCollection;
-import org.apache.ignite.internal.processors.cache.GridCacheDeployable;
 import org.apache.ignite.internal.processors.cache.GridCacheMessage;
-import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
-import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 
 /**
- * Deferred dht atomic update response.
+ *
  */
-public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implements GridCacheDeployable {
+public class GridNearAtomicMappingResponse extends GridCacheMessage {
     /** */
     private static final long serialVersionUID = 0L;
 
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
-    /** ACK future versions. */
-    @GridDirectCollection(Long.class)
-    private Collection<Long> futIds;
+    /** */
+    private int part;
+
+    /** */
+    @GridDirectCollection(UUID.class)
+    private List<UUID> mapping;
+
+    /** */
+    private long futId;
+
+    /**
+     *
+     */
+    public GridNearAtomicMappingResponse() {
+        // No-op.
+    }
+
+    /**
+     * @param cacheId Cache ID.
+     * @param part Partition.
+     * @param futId Future ID.
+     * @param mapping Mapping.
+     */
+    GridNearAtomicMappingResponse(int cacheId, int part, long futId, List<UUID> mapping) {
+        assert part >= 0 : part;
+
+        this.cacheId = cacheId;
+        this.part = part;
+        this.futId = futId;
+        this.mapping = mapping;
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition() {
+        return part;
+    }
+
+    /**
+     * @return Mapping.
+     */
+    public List<UUID> mapping() {
+        return mapping;
+    }
+
+    /**
+     * @return Future ID.
+     */
+    public long futureId() {
+        return futId;
+    }
 
     /** {@inheritDoc} */
     @Override public int lookupIndex() {
         return CACHE_MSG_IDX;
     }
 
-    /**
-     * Empty constructor required by {@link Externalizable}
-     */
-    public GridDhtAtomicDeferredUpdateResponse() {
-        // No-op.
+    /** {@inheritDoc} */
+    @Override public byte directType() {
+        return -47;
     }
 
-    /**
-     * Constructor.
-     *
-     * @param cacheId Cache ID.
-     * @param futIds Future IDs.
-     * @param addDepInfo Deployment info.
-     */
-    public GridDhtAtomicDeferredUpdateResponse(int cacheId, Collection<Long> futIds, boolean addDepInfo) {
-        assert !F.isEmpty(futIds);
-
-        this.cacheId = cacheId;
-        this.futIds = futIds;
-        this.addDepInfo = addDepInfo;
+    /** {@inheritDoc} */
+    @Override public byte fieldsCount() {
+        return 6;
     }
 
     /** {@inheritDoc} */
     @Override public boolean addDeploymentInfo() {
-        return addDepInfo;
-    }
-
-    /**
-     * @return List of ACKed future ids.
-     */
-    public Collection<Long> futureIds() {
-        return futIds;
-    }
-
-    /** {@inheritDoc} */
-    @Override public IgniteLogger messageLogger(GridCacheSharedContext ctx) {
-        return ctx.atomicMessageLogger();
+        return false;
     }
 
     /** {@inheritDoc} */
@@ -105,7 +124,19 @@ public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implem
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeCollection("futIds", futIds, MessageCollectionItemType.LONG))
+                if (!writer.writeLong("futId", futId))
+                    return false;
+
+                writer.incrementState();
+
+            case 4:
+                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
+                    return false;
+
+                writer.incrementState();
+
+            case 5:
+                if (!writer.writeInt("part", part))
                     return false;
 
                 writer.incrementState();
@@ -127,7 +158,23 @@ public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implem
 
         switch (reader.state()) {
             case 3:
-                futIds = reader.readCollection("futIds", MessageCollectionItemType.LONG);
+                futId = reader.readLong("futId");
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 4:
+                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 5:
+                part = reader.readInt("part");
 
                 if (!reader.isLastRead())
                     return false;
@@ -136,21 +183,11 @@ public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implem
 
         }
 
-        return reader.afterMessageRead(GridDhtAtomicDeferredUpdateResponse.class);
-    }
-
-    /** {@inheritDoc} */
-    @Override public byte directType() {
-        return 37;
-    }
-
-    /** {@inheritDoc} */
-    @Override public byte fieldsCount() {
-        return 4;
+        return reader.afterMessageRead(GridNearAtomicMappingResponse.class);
     }
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(GridDhtAtomicDeferredUpdateResponse.class, this);
+        return S.toString(GridNearAtomicMappingResponse.class, this);
     }
 }

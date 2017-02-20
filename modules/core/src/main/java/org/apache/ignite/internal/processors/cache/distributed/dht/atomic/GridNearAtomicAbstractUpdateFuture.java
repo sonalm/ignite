@@ -197,7 +197,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
     /**
      * Performs future mapping.
      */
-    public void map() {
+    public final void map() {
         AffinityTopologyVersion topVer = cctx.shared().lockedTopologyVersion(null);
 
         if (topVer == null)
@@ -257,7 +257,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
     protected void mapSingle(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
         if (cctx.localNodeId().equals(nodeId)) {
             cache.updateAllAsyncInternal(nodeId, req,
-                new CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse>() {
+                new GridDhtAtomicCache.UpdateReplyClosure() {
                     @Override public void apply(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
                         onResult(res.nodeId(), res, false);
                     }
@@ -299,6 +299,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
     public abstract void onResult(UUID nodeId, GridNearAtomicUpdateResponse res, boolean nodeErr);
 
     public abstract void onResult(UUID nodeId, GridDhtAtomicNearResponse res);
+
+    public abstract void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res);
 
     /**
      * @param req Request.

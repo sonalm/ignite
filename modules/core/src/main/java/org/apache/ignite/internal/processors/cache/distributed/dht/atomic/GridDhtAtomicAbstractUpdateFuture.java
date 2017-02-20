@@ -19,6 +19,7 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,7 +82,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
     /** Completion callback. */
     @GridToStringExclude
-    private final CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse> completionCb;
+    private final GridDhtAtomicCache.UpdateReplyClosure completionCb;
 
     /** Update request. */
     protected final GridNearAtomicAbstractUpdateRequest updateReq;
@@ -108,7 +109,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      */
     protected GridDhtAtomicAbstractUpdateFuture(
         GridCacheContext cctx,
-        CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse> completionCb,
+        GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
         GridNearAtomicUpdateResponse updateRes) {
@@ -367,9 +368,13 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         List<UUID> dhtNodes = null;
 
         if (fullSync) {
-            dhtNodes = new ArrayList<>(mappings.size());
+            if (!F.isEmpty(mappings)) {
+                dhtNodes = new ArrayList<>(mappings.size());
 
-            dhtNodes.addAll(mappings.keySet());
+                dhtNodes.addAll(mappings.keySet());
+            }
+            else
+                dhtNodes = Collections.emptyList();
 
             if (primaryReplyToNear)
                 updateRes.mapping(dhtNodes);
@@ -380,9 +385,25 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
             if (primaryReplyToNear)
                 completionCb.apply(updateReq, updateRes);
+            else {
+                if (fullSync && GridDhtAtomicCache.IGNITE_ATOMIC_SND_MAPPING_TO_NEAR) {
+                    GridNearAtomicMappingResponse mappingRes = new GridNearAtomicMappingResponse(
+                        cctx.cacheId(),
+                        updateReq.partition(),
+                        updateReq.futureId(),
+                        dhtNodes);
+
+                    try {
+                        cctx.io().send(updateRes.nodeId(), mappingRes, cctx.ioPolicy());
+                    }
+                    catch (IgniteCheckedException e) {
+                        U.error(msgLog, "Failed to send mapping response [futId=" + futId +
+                            ", writeVer=" + writeVer + ", node=" + updateRes.nodeId() + ']');
+                    }
+                }
+            }
         }
         else {
-            // Reply.
             completionCb.apply(updateReq, updateRes);
 
             onDone();

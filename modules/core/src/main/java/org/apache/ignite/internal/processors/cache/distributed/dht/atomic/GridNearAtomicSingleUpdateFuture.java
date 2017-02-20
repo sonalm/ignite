@@ -217,6 +217,29 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             if (cctx.discovery().node(dhtNodeId) != null)
                 mapping.add(dhtNodeId);
         }
+
+        if (rcvd != null)
+            mapping.removeAll(rcvd);
+    }
+
+    /** {@inheritDoc} */
+    @Override public void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res) {
+        GridCacheReturn opRes0 = null;
+
+        synchronized (mux) {
+            if (futId == null || futId != res.futureId())
+                return;
+
+            if (mapping == null) {
+                initMapping(res.mapping());
+
+                if (mapping.isEmpty() && opRes != null)
+                    opRes0 = opRes;
+            }
+        }
+
+        if (opRes0 != null)
+            onDone(opRes0);
     }
 
     /** {@inheritDoc} */
@@ -251,11 +274,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             if (opRes == null && res.hasResult())
                 opRes = res.result();
 
-            if (mapping.isEmpty() && opRes != null) {
+            if (mapping.isEmpty() && opRes != null)
                 opRes0 = opRes;
-
-                futId = null;
-            }
         }
 
         if (opRes0 != null)
@@ -324,12 +344,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 else
                     opRes = ret;
 
-                if (res.mapping() != null) {
+                if (res.mapping() != null)
                     initMapping(res.mapping());
-
-                    if (rcvd != null)
-                        mapping.removeAll(rcvd);
-                }
                 else
                     mapping = Collections.emptySet();
 

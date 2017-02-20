@@ -1151,6 +1151,7 @@ public class IgniteKernal implements IgniteEx, IgniteMXBean, Externalizable {
                                 "Metrics for local node (to disable set 'metricsLogFrequency' to 0)" + NL +
                                 "    ^-- Node [id=" + id + ", name=" + name() + ", uptime=" + getUpTimeFormatted() + "]" + NL +
                                 "    ^-- H/N/C [hosts=" + hosts + ", nodes=" + nodes + ", CPUs=" + cpus + "]" + NL +
+                                "    ^-- Futures [futs=" + ctx.cache().context().mvcc().atomicFuturesCount() + "]" + NL +
                                 "    ^-- CPU [cur=" + dblFmt.format(cpuLoadPct) + "%, avg=" +
                                 dblFmt.format(avgCpuLoadPct) + "%, GC=" + dblFmt.format(gcPct) + "%]" + NL +
                                 "    ^-- Heap [used=" + dblFmt.format(heapUsedInMBytes) + "MB, free=" +

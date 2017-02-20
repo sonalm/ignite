@@ -107,7 +107,7 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
     private final ConcurrentMap<GridCacheVersion, Collection<GridCacheMvccFuture<?>>> mvccFuts = newMap();
 
     /** Pending atomic futures. */
-    private final ConcurrentMap<Long, GridCacheAtomicFuture<?>> atomicFuts = new ConcurrentHashMap8<>();
+    private final ConcurrentHashMap8<Long, GridCacheAtomicFuture<?>> atomicFuts = new ConcurrentHashMap8<>();
 
     /** Pending data streamer futures. */
     private final GridConcurrentHashSet<DataStreamerFuture> dataStreamerFuts = new GridConcurrentHashSet<>();
@@ -450,6 +450,13 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
      */
     public Collection<GridCacheAtomicFuture<?>> atomicFutures() {
         return atomicFuts.values();
+    }
+
+    /**
+     * @return Collection of pending atomic futures.
+     */
+    public int atomicFuturesCount() {
+        return atomicFuts.size();
     }
 
     /**
