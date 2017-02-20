@@ -562,6 +562,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
 
                 GridDhtAtomicUpdateResponse res = new GridDhtAtomicUpdateResponse(
                     ctx.cacheId(),
+                    req.partition(),
                     req.futureId(),
                     ctx.deploymentEnabled());
 
@@ -803,6 +804,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
 
                 GridDhtAtomicUpdateResponse res = new GridDhtAtomicUpdateResponse(
                     ctx.cacheId(),
+                    req.partition(),
                     req.futureId(),
                     ctx.deploymentEnabled());
 

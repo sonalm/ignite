@@ -44,6 +44,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     public static final int CACHE_MSG_IDX = nextIndexId();
 
     /** */
+    private int partId;
+
+    /** */
     private long futId;
 
     /** */
@@ -69,11 +72,17 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      * @param mapping Update mapping.
      * @param flags Flags.
      */
-    public GridDhtAtomicNearResponse(int cacheId, long futId, List<UUID> mapping, byte flags) {
+    public GridDhtAtomicNearResponse(int cacheId, int partId, long futId, List<UUID> mapping, byte flags) {
         this.cacheId = cacheId;
+        this.partId = partId;
         this.futId = futId;
         this.mapping = mapping;
         this.flags = flags;
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition() {
+        return partId;
     }
 
     /**
@@ -147,7 +156,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 7;
+        return 8;
     }
 
     /** {@inheritDoc} */
@@ -210,6 +219,12 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 writer.incrementState();
 
+            case 7:
+                if (!writer.writeInt("partId", partId))
+                    return false;
+
+                writer.incrementState();
+
         }
 
         return true;
@@ -252,6 +267,14 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
             case 6:
                 mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 7:
+                partId = reader.readInt("partId");
 
                 if (!reader.isLastRead())
                     return false;

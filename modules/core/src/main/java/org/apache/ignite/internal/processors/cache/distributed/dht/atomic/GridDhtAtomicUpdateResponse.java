@@ -69,7 +69,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     private List<KeyCacheObject> nearEvicted;
 
     /** */
-    private int partId = -1;
+    private int partId;
 
     /**
      * Empty constructor required by {@link Externalizable}.
@@ -80,11 +80,13 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
     /**
      * @param cacheId Cache ID.
+     * @param partId Partition.
      * @param futId Future ID.
      * @param addDepInfo Deployment info.
      */
-    public GridDhtAtomicUpdateResponse(int cacheId, long futId, boolean addDepInfo) {
+    public GridDhtAtomicUpdateResponse(int cacheId, int partId, long futId, boolean addDepInfo) {
         this.cacheId = cacheId;
+        this.partId = partId;
         this.futId = futId;
         this.addDepInfo = addDepInfo;
     }
@@ -164,13 +166,6 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
      */
     void nearEvicted(List<KeyCacheObject> nearEvicted) {
         this.nearEvicted = nearEvicted;
-    }
-
-    /**
-     * @param partId Partition ID to set.
-     */
-    public void partition(int partId) {
-        this.partId = partId;
     }
 
     /** {@inheritDoc} */

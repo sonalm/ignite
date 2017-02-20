@@ -473,14 +473,11 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
     /** {@inheritDoc} */
     @Override protected void mapOnTopology() {
-        // TODO IGNITE-4705: primary should block topology change, so it seem read lock is not needed.
+        // TODO IGNITE-4705: primary should block topology change, so it seems read lock is not needed.
         cache.topology().readLock();
 
         AffinityTopologyVersion topVer;
-
         Long futId;
-
-        cache.topology().readLock();
 
         try {
             if (cache.topology().stopping()) {
