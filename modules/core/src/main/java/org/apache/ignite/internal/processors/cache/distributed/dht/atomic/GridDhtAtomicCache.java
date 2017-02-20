@@ -3240,7 +3240,11 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         GridCacheVersion ver = req.writeVersion();
 
         GridDhtAtomicNearResponse nearRes = ctx.config().getWriteSynchronizationMode() == FULL_SYNC ?
-            new GridDhtAtomicNearResponse(req.partition(), ctx.cacheId(), req.nearFutureId(), req.dhtNodes(), req.flags()) : null;
+            new GridDhtAtomicNearResponse(ctx.cacheId(),
+                req.partition(),
+                req.nearFutureId(),
+                req.dhtNodes(),
+                req.flags()) : null;
 
         boolean replicate = ctx.isDrEnabled();
 

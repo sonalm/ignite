@@ -61,8 +61,6 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
      * @param mapping Mapping.
      */
     GridNearAtomicMappingResponse(int cacheId, int part, long futId, List<UUID> mapping) {
-        assert part >= 0 : part;
-
         this.cacheId = cacheId;
         this.part = part;
         this.futId = futId;
