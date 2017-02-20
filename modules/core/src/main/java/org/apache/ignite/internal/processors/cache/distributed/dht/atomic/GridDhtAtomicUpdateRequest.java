@@ -226,7 +226,7 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
         boolean addPrevVal,
         int partId,
         @Nullable CacheObject prevVal,
-        @Nullable Long updateCntr
+        long updateCntr
     ) {
         keys.add(key);
 
@@ -247,12 +247,10 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
             prevVals.add(prevVal);
         }
 
-        if (updateCntr != null) {
-            if (updateCntrs == null)
-                updateCntrs = new GridLongList();
+        if (updateCntrs == null)
+            updateCntrs = new GridLongList();
 
-            updateCntrs.add(updateCntr);
-        }
+        updateCntrs.add(updateCntr);
 
         // In case there is no conflict, do not create the list.
         if (conflictVer != null) {

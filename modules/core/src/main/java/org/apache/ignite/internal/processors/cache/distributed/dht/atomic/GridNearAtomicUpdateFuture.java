@@ -496,11 +496,11 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
     /** {@inheritDoc} */
     @Override protected void mapOnTopology() {
-        cache.topology().readLock();
-
         AffinityTopologyVersion topVer;
 
         Long futId;
+
+        cache.topology().readLock();
 
         try {
             if (cache.topology().stopping()) {

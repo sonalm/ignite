@@ -109,6 +109,9 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     @GridDirectCollection(UUID.class)
     private List<UUID> mapping;
 
+    /** Partition ID. */
+    private int partId = -1;
+
     /**
      * Empty constructor required by {@link Externalizable}.
      */
@@ -167,6 +170,13 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      */
     public long futureId() {
         return futId;
+    }
+
+    /**
+     * @param partId Partition ID for proper striping on near node.
+     */
+    public void partition(int partId) {
+        this.partId = partId;
     }
 
     /**
@@ -444,6 +454,11 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
         if (ret != null)
             ret.finishUnmarshal(cctx, ldr);
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition() {
+        return partId;
     }
 
     /** {@inheritDoc} */

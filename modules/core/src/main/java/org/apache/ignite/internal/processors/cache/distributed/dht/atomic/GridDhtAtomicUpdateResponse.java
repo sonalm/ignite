@@ -68,6 +68,9 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     @GridDirectCollection(KeyCacheObject.class)
     private List<KeyCacheObject> nearEvicted;
 
+    /** */
+    private int partId = -1;
+
     /**
      * Empty constructor required by {@link Externalizable}.
      */
@@ -163,6 +166,18 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
         this.nearEvicted = nearEvicted;
     }
 
+    /**
+     * @param partId Partition ID to set.
+     */
+    public void partition(int partId) {
+        this.partId = partId;
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition() {
+        return partId;
+    }
+
     /** {@inheritDoc} */
     @Override public void prepareMarshal(GridCacheSharedContext ctx) throws IgniteCheckedException {
         super.prepareMarshal(ctx);
@@ -240,6 +255,12 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
                 writer.incrementState();
 
+            case 7:
+                if (!writer.writeInt("partId", partId))
+                    return false;
+
+                writer.incrementState();
+
         }
 
         return true;
@@ -288,6 +309,14 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
                 reader.incrementState();
 
+            case 7:
+                partId = reader.readInt("partId");
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
         }
 
         return reader.afterMessageRead(GridDhtAtomicUpdateResponse.class);
@@ -300,7 +329,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 7;
+        return 8;
     }
 
     /** {@inheritDoc} */

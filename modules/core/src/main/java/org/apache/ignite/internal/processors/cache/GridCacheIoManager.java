@@ -26,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
 import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteException;
 import org.apache.ignite.IgniteLogger;
@@ -75,7 +76,7 @@ import org.apache.ignite.internal.processors.cache.transactions.IgniteTxStateAwa
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.F0;
 import org.apache.ignite.internal.util.GridLeanSet;
-import org.apache.ignite.internal.util.GridSpinReadWriteLock;
+import org.apache.ignite.internal.util.StripedCompositeReadWriteLock;
 import org.apache.ignite.internal.util.typedef.CI1;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.P1;
@@ -121,7 +122,8 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
     private boolean stopping;
 
     /** Mutex. */
-    private final GridSpinReadWriteLock rw = new GridSpinReadWriteLock();
+    private final StripedCompositeReadWriteLock rw =
+        new StripedCompositeReadWriteLock(Runtime.getRuntime().availableProcessors());
 
     /** Deployment enabled. */
     private boolean depEnabled;
@@ -317,7 +319,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
         // Busy wait is intentional.
         while (true) {
             try {
-                if (rw.tryWriteLock(200, TimeUnit.MILLISECONDS))
+                if (rw.writeLock().tryLock(200, TimeUnit.MILLISECONDS))
                     break;
                 else
                     Thread.sleep(200);
@@ -336,7 +338,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
             stopping = true;
         }
         finally {
-            rw.writeUnlock();
+            rw.writeLock().unlock();
         }
     }
 
@@ -348,7 +350,9 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
     @SuppressWarnings({"unchecked", "ConstantConditions", "ThrowableResultOfMethodCallIgnored"})
     private void onMessage0(final UUID nodeId, final GridCacheMessage cacheMsg,
         final IgniteBiInClosure<UUID, GridCacheMessage> c) {
-        rw.readLock();
+        Lock lock = rw.readLock();
+
+        lock.lock();
 
         try {
             if (stopping) {
@@ -379,7 +383,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
             if (depEnabled)
                 cctx.deploy().ignoreOwnership(false);
 
-            rw.readUnlock();
+            lock.unlock();
         }
     }
 
@@ -822,9 +826,6 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
      */
     private void processMessage(UUID nodeId, GridCacheMessage msg, IgniteBiInClosure<UUID, GridCacheMessage> c) {
         try {
-            // We will not end up with storing a bunch of new UUIDs
-            // in each cache entry, since node ID is stored in NIO session
-            // on handshake.
             c.apply(nodeId, msg);
 
             if (log.isDebugEnabled())

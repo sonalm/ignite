@@ -112,8 +112,10 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes) {
+        GridNearAtomicUpdateResponse updateRes
+    ) {
         this.cctx = cctx;
+
         this.updateReq = updateReq;
         this.completionCb = completionCb;
         this.updateRes = updateRes;

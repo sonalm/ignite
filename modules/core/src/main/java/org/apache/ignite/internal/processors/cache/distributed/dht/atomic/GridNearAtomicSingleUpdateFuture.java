@@ -480,6 +480,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         Long futId;
 
+        cache.topology().readLock();
+
         try {
             if (cache.topology().stopping()) {
                 onDone(new IgniteCheckedException("Failed to perform cache operation (cache is stopped): " +
