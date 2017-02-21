@@ -1825,7 +1825,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                         boolean sndPrevVal = !top.rebalanceFinished(req.topologyVersion());
 
-                        dhtFut = createDhtFuture(ver, req, res, completionCb, false);
+                        dhtFut = createDhtFuture(ver, req, res, false);
 
                         expiry = expiryPolicy(req.expiry());
 
@@ -1865,7 +1865,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                                 locked,
                                 ver,
                                 dhtFut,
-                                completionCb,
                                 ctx.isDrEnabled(),
                                 taskName,
                                 expiry,
@@ -1947,7 +1946,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         else {
             // If there are backups, map backup update future.
             if (dhtFut != null) {
-                dhtFut.map(res.returnValue());
+                dhtFut.map(completionCb, res.returnValue());
                 // Otherwise, complete the call.
             }
             else
@@ -2135,7 +2134,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                                 null,
                                 entryProcessorMap,
                                 dhtFut,
-                                completionCb,
                                 req,
                                 res,
                                 replicate,
@@ -2184,7 +2182,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                                 rmvKeys,
                                 entryProcessorMap,
                                 dhtFut,
-                                completionCb,
                                 req,
                                 res,
                                 replicate,
@@ -2311,7 +2308,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 rmvKeys,
                 entryProcessorMap,
                 dhtFut,
-                completionCb,
                 req,
                 res,
                 replicate,
@@ -2391,7 +2387,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param locked Locked entries.
      * @param ver Assigned update version.
      * @param dhtFut Optional DHT future.
-     * @param completionCb Completion callback to invoke when DHT future is completed.
      * @param replicate Whether DR is enabled for that cache.
      * @param taskName Task name.
      * @param expiry Expiry policy.
@@ -2407,7 +2402,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         List<GridDhtCacheEntry> locked,
         GridCacheVersion ver,
         @Nullable GridDhtAtomicAbstractUpdateFuture dhtFut,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb,
         boolean replicate,
         String taskName,
         @Nullable IgniteCacheExpiryPolicy expiry,
@@ -2485,7 +2479,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     dhtFut);
 
                 if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                    dhtFut = createDhtFuture(ver, req, res, completionCb, true);
+                    dhtFut = createDhtFuture(ver, req, res, true);
 
                     readersOnly = true;
                 }
@@ -2638,7 +2632,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         @Nullable final Collection<KeyCacheObject> rmvKeys,
         @Nullable final Map<KeyCacheObject, EntryProcessor<Object, Object, Object>> entryProcessorMap,
         @Nullable GridDhtAtomicAbstractUpdateFuture dhtFut,
-        final GridDhtAtomicCache.UpdateReplyClosure completionCb,
         final GridNearAtomicAbstractUpdateRequest req,
         final GridNearAtomicUpdateResponse res,
         final boolean replicate,
@@ -2792,7 +2785,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     batchRes.addDeleted(entry, updRes, entries);
 
                     if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                        dhtFut = createDhtFuture(ver, req, res, completionCb, true);
+                        dhtFut = createDhtFuture(ver, req, res, true);
 
                         batchRes.readersOnly(true);
                     }
@@ -3112,7 +3105,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param writeVer Write version.
      * @param updateReq Update request.
      * @param updateRes Update response.
-     * @param completionCb Completion callback to invoke when future is completed.
      * @param force If {@code true} then creates future without optimizations checks.
      * @return Backup update future or {@code null} if there are no backups.
      */
@@ -3120,13 +3112,12 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
         GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb,
         boolean force
     ) {
         if (updateReq.size() == 1)
-            return new GridDhtAtomicSingleUpdateFuture(ctx, completionCb, writeVer, updateReq, updateRes);
+            return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq, updateRes);
         else
-            return new GridDhtAtomicUpdateFuture(ctx, completionCb, writeVer, updateReq, updateRes);
+            return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq, updateRes);
 //        if (!force) {
 //            if (updateReq.fastMap())
 //                return null;

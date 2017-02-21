@@ -40,17 +40,14 @@ import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheEntry;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
-import org.apache.ignite.internal.util.tostring.GridToStringExclude;
 import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.CI1;
-import org.apache.ignite.internal.util.typedef.CI2;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteUuid;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
 
@@ -80,12 +77,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /** Future version. */
     protected final long futId;
 
-    /** Completion callback. */
-    @GridToStringExclude
-    private final GridDhtAtomicCache.UpdateReplyClosure completionCb;
-
     /** Update request. */
-    protected final GridNearAtomicAbstractUpdateRequest updateReq;
+    final GridNearAtomicAbstractUpdateRequest updateReq;
 
     /** Update response. */
     final GridNearAtomicUpdateResponse updateRes;
@@ -100,16 +93,17 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /** Response count. */
     private volatile int resCnt;
 
+    /** */
+    private boolean repliedToNear;
+
     /**
      * @param cctx Cache context.
-     * @param completionCb Callback to invoke when future is completed.
      * @param writeVer Write version.
      * @param updateReq Update request.
      * @param updateRes Update response.
      */
     protected GridDhtAtomicAbstractUpdateFuture(
         GridCacheContext cctx,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
         GridNearAtomicUpdateResponse updateRes
@@ -117,7 +111,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         this.cctx = cctx;
 
         this.updateReq = updateReq;
-        this.completionCb = completionCb;
         this.updateRes = updateRes;
         this.writeVer = writeVer;
 
@@ -235,6 +228,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     protected abstract void addNearKey(KeyCacheObject key, Collection<UUID> readers);
 
     /**
+     * @param nearNodeId Near node ID.
      * @param readers Entry readers.
      * @param entry Entry.
      * @param val Value.
@@ -336,9 +330,14 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         GridDhtAtomicAbstractUpdateRequest req = mappings != null ? mappings.get(nodeId) : null;
 
+        boolean needReplyToNear = false;
+
         if (req != null) {
             synchronized (this) {
                 if (req.onResponse()) {
+                    if (nodeErr && !repliedToNear)
+                        needReplyToNear = repliedToNear = true;
+
                     resCnt0 = resCnt;
 
                     resCnt0 += 1;
@@ -347,6 +346,51 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                 }
                 else
                     return false;
+            }
+
+            if (needReplyToNear) {
+                assert !F.isEmpty(mappings);
+
+                List<UUID> dhtNodes = new ArrayList<>(mappings.size());
+
+                dhtNodes.addAll(mappings.keySet());
+
+                GridDhtAtomicNearResponse res = new GridDhtAtomicNearResponse(cctx.cacheId(),
+                    req.partition(),
+                    req.futureId(),
+                    cctx.localNodeId(),
+                    dhtNodes,
+                    req.flags());
+
+                res.failedNodeId(nodeId);
+
+                try {
+                    cctx.io().send(req.nearNodeId(), res, cctx.ioPolicy());
+
+                    if (msgLog.isDebugEnabled()) {
+                        msgLog.debug("DTH update fut, sent response on DHT node fail " +
+                            "[futId=" + futId +
+                            ", writeVer=" + writeVer +
+                            ", node=" + req.nearNodeId() +
+                            ", failedNode=" + nodeId + ']');
+                    }
+                }
+                catch (ClusterTopologyCheckedException ignored) {
+                    if (msgLog.isDebugEnabled()) {
+                        msgLog.debug("DTH update fut, failed to notify near node on DHT node fail, near node left " +
+                            "[futId=" + futId +
+                            ", writeVer=" + writeVer +
+                            ", node=" + req.nearNodeId() +
+                            ", failedNode=" + nodeId + ']');
+                    }
+                }
+                catch (IgniteCheckedException ignored) {
+                    U.error(msgLog, "DTH update fut, failed to notify near node on DHT node fail " +
+                        "[futId=" + futId +
+                        ", writeVer=" + writeVer +
+                        ", node=" + req.nearNodeId() +
+                        ", failedNode=" + nodeId + ']');
+                }
             }
 
             if (resCnt0 == mappings.size())
@@ -361,11 +405,12 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /**
      * Sends requests to remote nodes.
      *
+     * @param completionCb Callback to invoke to send response to near node.
      * @param ret Cache operation return value.
      */
-    final void map(GridCacheReturn ret) {
+    final void map(GridDhtAtomicCache.UpdateReplyClosure completionCb, GridCacheReturn ret) {
         boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
-        boolean primaryReplyToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC || ret.hasValue();
+        repliedToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC || ret.hasValue();
 
         List<UUID> dhtNodes = null;
 
@@ -378,14 +423,14 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             else
                 dhtNodes = Collections.emptyList();
 
-            if (primaryReplyToNear)
+            if (repliedToNear)
                 updateRes.mapping(dhtNodes);
         }
 
         if (!F.isEmpty(mappings)) {
-            sendDhtRequests(fullSync && !primaryReplyToNear, dhtNodes, ret);
+            sendDhtRequests(fullSync && !repliedToNear, dhtNodes, ret);
 
-            if (primaryReplyToNear)
+            if (repliedToNear)
                 completionCb.apply(updateReq, updateRes);
             else {
                 if (fullSync && GridDhtAtomicCache.IGNITE_ATOMIC_SND_MAPPING_TO_NEAR) {

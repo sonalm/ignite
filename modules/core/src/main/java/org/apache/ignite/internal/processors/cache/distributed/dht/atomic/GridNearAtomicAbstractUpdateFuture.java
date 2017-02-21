@@ -442,6 +442,13 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onDhtResponse(GridCacheContext cctx, UUID nodeId, GridDhtAtomicNearResponse res) {
+            if (res.primaryDhtFailureResponse()) {
+                assert res.mapping() != null : res;
+                assert res.failedNodeId() != null : res;
+
+                nodeId = res.failedNodeId();
+            }
+
             if (res.mapping() != null) {
                 // Mapping is sent from dht nodes.
                 if (mapping == null)

@@ -56,6 +56,9 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** */
     public static final int DHT_ATOMIC_RESULT_SUCCESS_MASK = 0x10;
 
+    /** */
+    public static final int DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE = 0x20;
+
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 

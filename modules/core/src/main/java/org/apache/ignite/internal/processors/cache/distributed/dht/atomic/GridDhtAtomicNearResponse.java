@@ -32,6 +32,7 @@ import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
+import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_RESULT_SUCCESS_MASK;
 
 /**
@@ -63,6 +64,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     /** */
     private UpdateErrors errors;
 
+    /** */
+    private UUID failedNodeId;
+
     /**
      *
      */
@@ -78,7 +82,13 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      * @param mapping Update mapping.
      * @param flags Flags.
      */
-    public GridDhtAtomicNearResponse(int cacheId, int partId, long futId, UUID primaryId, List<UUID> mapping, byte flags) {
+    public GridDhtAtomicNearResponse(int cacheId,
+        int partId,
+        long futId,
+        UUID primaryId,
+        List<UUID> mapping,
+        byte flags)
+    {
         this.cacheId = cacheId;
         this.partId = partId;
         this.futId = futId;
@@ -88,9 +98,31 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     }
 
     /**
+     * @return Failed node ID.
+     */
+    UUID failedNodeId() {
+        return failedNodeId;
+    }
+
+    /**
+     * @param failedNodeId Failed node ID (used when primary notifies near node).
+     */
+    void failedNodeId(UUID failedNodeId) {
+        assert failedNodeId != null;
+
+        this.failedNodeId = failedNodeId;
+
+        setFlag(true, DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
+    }
+
+    boolean primaryDhtFailureResponse() {
+        return isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
+    }
+
+    /**
      * @return Primary node ID.
      */
-    public UUID primaryId() {
+    UUID primaryId() {
         return primaryId;
     }
 
@@ -170,7 +202,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 9;
+        return 10;
     }
 
     /** {@inheritDoc} */
@@ -216,30 +248,36 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 writer.incrementState();
 
             case 4:
-                if (!writer.writeByte("flags", flags))
+                if (!writer.writeUuid("failedNodeId", failedNodeId))
                     return false;
 
                 writer.incrementState();
 
             case 5:
-                if (!writer.writeLong("futId", futId))
+                if (!writer.writeByte("flags", flags))
                     return false;
 
                 writer.incrementState();
 
             case 6:
-                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
+                if (!writer.writeLong("futId", futId))
                     return false;
 
                 writer.incrementState();
 
             case 7:
-                if (!writer.writeInt("partId", partId))
+                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
                     return false;
 
                 writer.incrementState();
 
             case 8:
+                if (!writer.writeInt("partId", partId))
+                    return false;
+
+                writer.incrementState();
+
+            case 9:
                 if (!writer.writeUuid("primaryId", primaryId))
                     return false;
 
@@ -270,7 +308,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 4:
-                flags = reader.readByte("flags");
+                failedNodeId = reader.readUuid("failedNodeId");
 
                 if (!reader.isLastRead())
                     return false;
@@ -278,7 +316,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 5:
-                futId = reader.readLong("futId");
+                flags = reader.readByte("flags");
 
                 if (!reader.isLastRead())
                     return false;
@@ -286,7 +324,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 6:
-                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
+                futId = reader.readLong("futId");
 
                 if (!reader.isLastRead())
                     return false;
@@ -294,7 +332,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 7:
-                partId = reader.readInt("partId");
+                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
 
                 if (!reader.isLastRead())
                     return false;
@@ -302,6 +340,14 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 8:
+                partId = reader.readInt("partId");
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 9:
                 primaryId = reader.readUuid("primaryId");
 
                 if (!reader.isLastRead())

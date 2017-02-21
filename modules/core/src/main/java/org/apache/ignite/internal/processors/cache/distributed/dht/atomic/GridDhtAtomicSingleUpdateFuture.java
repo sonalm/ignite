@@ -50,20 +50,17 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
 
     /**
      * @param cctx Cache context.
-     * @param completionCb Callback to invoke when future is completed.
      * @param writeVer Write version.
      * @param updateReq Update request.
      * @param updateRes Update response.
      */
     GridDhtAtomicSingleUpdateFuture(
         GridCacheContext cctx,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
         GridNearAtomicUpdateResponse updateRes
     ) {
         super(cctx,
-            completionCb,
             writeVer,
             updateReq,
             updateRes);
