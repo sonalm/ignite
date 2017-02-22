@@ -44,8 +44,6 @@ import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.ignite.internal.processors.cache.GridCacheUtils.SKIP_STORE_FLAG_MASK;
-
 /**
  * Lite dht cache backup update request.
  */
@@ -141,10 +139,6 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
     /** Partition. */
     private GridLongList updateCntrs;
 
-    /** */
-    @GridDirectTransient
-    private List<Integer> partIds;
-
     /** Keep binary flag. */
     private boolean keepBinary;
 
@@ -203,10 +197,10 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
         this.addDepInfo = addDepInfo;
         this.keepBinary = keepBinary;
 
-        setFlag(skipStore, SKIP_STORE_FLAG_MASK);
+        if (skipStore)
+            setFlag(true, DHT_ATOMIC_SKIP_STORE_FLAG_MASK);
 
         keys = new ArrayList<>();
-        partIds = new ArrayList<>();
 
         if (forceTransformBackups) {
             entryProcessors = new ArrayList<>();
@@ -224,13 +218,12 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
         long conflictExpireTime,
         @Nullable GridCacheVersion conflictVer,
         boolean addPrevVal,
-        int partId,
         @Nullable CacheObject prevVal,
         long updateCntr
     ) {
-        keys.add(key);
+        assert key.partition() >= 0 : key;
 
-        partIds.add(partId);
+        keys.add(key);
 
         if (forceTransformBackups) {
             assert entryProcessor != null;
@@ -297,6 +290,8 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
         EntryProcessor<Object, Object, Object> entryProcessor,
         long ttl,
         long expireTime) {
+        assert key.partition() >= 0 : key;
+
         if (nearKeys == null) {
             nearKeys = new ArrayList<>();
 
@@ -399,11 +394,6 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
     }
 
     /** {@inheritDoc} */
-    @Override public int partitionId(int idx) {
-        return partIds.get(idx);
-    }
-
-    /** {@inheritDoc} */
     @Override public Long updateCounter(int updCntr) {
         if (updateCntrs != null && updCntr < updateCntrs.size())
             return updateCntrs.get(updCntr);
@@ -485,7 +475,9 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
 
     /** {@inheritDoc} */
     @Override public int partition() {
-        return partIds != null && !partIds.isEmpty() ? partIds.get(0) : -1;
+        assert !F.isEmpty(keys) || !F.isEmpty(nearKeys);
+
+        return keys.size() > 0 ? keys.get(0).partition() : nearKeys.get(0).partition();
     }
 
     /** {@inheritDoc} */
@@ -582,13 +574,6 @@ public class GridDhtAtomicUpdateRequest extends GridDhtAtomicAbstractUpdateReque
 
             if (nearEntryProcessors == null)
                 nearEntryProcessors = unmarshalCollection(nearEntryProcessorsBytes, ctx, ldr);
-        }
-
-        if (partIds != null && !partIds.isEmpty()) {
-            assert partIds.size() == keys.size();
-
-            for (int i = 0; i < keys.size(); i++)
-                keys.get(i).partition(partIds.get(i));
         }
     }
 

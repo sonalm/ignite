@@ -151,33 +151,62 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
     /** {@inheritDoc} */
     @Override public boolean onNodeLeft(UUID nodeId) {
+        GridCacheReturn opRes0 = null;
+        CachePartialUpdateCheckedException err0 = null;
+
         GridNearAtomicUpdateResponse res = null;
 
         GridNearAtomicAbstractUpdateRequest req;
 
         synchronized (mux) {
-            if (singleReq != null)
+            if (singleReq != null) {
                 req = singleReq.processPrimaryResponse(nodeId);
+
+                if (req == null) {
+                    if (singleReq.onNodeLeft(nodeId)) {
+                        opRes0 = opRes;
+                        err0 = err;
+                    }
+                    else
+                        return false;
+                }
+                else
+                    res = primaryFailedResponse(req, nodeId);
+            }
             else {
                 PrimaryRequestState reqState = mappings != null ? mappings.get(nodeId) : null;
 
-                req = reqState != null ? reqState.processPrimaryResponse(nodeId) : null;
-            }
+                if (reqState != null) {
+                    req = reqState.processPrimaryResponse(nodeId);
 
-            if (req != null) {
-                assert req.response() == null : req;
+                    if (req == null) {
+                        boolean rcvAll = false;
 
-                res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
-                    nodeId,
-                    req.futureId(),
-                    cctx.deploymentEnabled());
+                        for (PrimaryRequestState reqState0 : mappings.values()) {
+                            if (reqState0.onNodeLeft(nodeId)) {
+                                assert mappings.size() > resCnt : "[mappings=" + mappings.size() + ", cnt=" + resCnt + ']';
 
-                ClusterTopologyCheckedException e = new ClusterTopologyCheckedException("Primary node left grid " +
-                    "before response is received: " + nodeId);
+                                resCnt++;
 
-                e.retryReadyFuture(cctx.shared().nextAffinityReadyFuture(req.topologyVersion()));
+                                if (mappings.size() == resCnt) {
+                                    opRes0 = opRes;
+                                    err0 = err;
 
-                res.addFailedKeys(req.keys(), e);
+                                    rcvAll = true;
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!rcvAll)
+                            return false;
+                    }
+                    else
+                        res = primaryFailedResponse(req, nodeId);
+                }
+                else
+                    return false;
             }
         }
 
@@ -190,8 +219,33 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
             onPrimaryResponse(nodeId, res, true);
         }
+        else
+            onDone(opRes0, err0);
 
         return false;
+    }
+
+    /**
+     * @param req Request.
+     * @param nodeId Failed node ID.
+     * @return Response to notify about primary failure.
+     */
+    private GridNearAtomicUpdateResponse primaryFailedResponse(GridNearAtomicAbstractUpdateRequest req, UUID nodeId) {
+        assert req.response() == null : req;
+
+        GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
+            nodeId,
+            req.futureId(),
+            cctx.deploymentEnabled());
+
+        ClusterTopologyCheckedException e = new ClusterTopologyCheckedException("Primary node left grid " +
+            "before response is received: " + nodeId);
+
+        e.retryReadyFuture(cctx.shared().nextAffinityReadyFuture(req.topologyVersion()));
+
+        res.addFailedKeys(req.keys(), e);
+
+        return res;
     }
 
     /** {@inheritDoc} */
@@ -227,7 +281,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
     /** {@inheritDoc} */
     @Override public void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res) {
-        GridCacheReturn opRes0 = null;
+        GridCacheReturn opRes0;
+        CachePartialUpdateCheckedException err0;
 
         synchronized (mux) {
             if (futId == null || futId != res.futureId())
@@ -238,9 +293,10 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             if (singleReq != null) {
                 if (singleReq.onMappingReceived(cctx, res)) {
                     opRes0 = opRes;
-
-                    assert opRes0 != null;
+                    err0 = err;
                 }
+                else
+                    return;
             }
             else {
                 reqState = mappings != null ? mappings.get(nodeId) : null;
@@ -252,20 +308,23 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
                     if (mappings.size() == resCnt) {
                         opRes0 = opRes;
-
-                        assert opRes0 != null;
+                        err0 = err;
                     }
+                    else
+                        return;
                 }
+                else
+                    return;
             }
         }
 
-        if (opRes0 != null)
-            onDone(opRes0);
+        onDone(opRes0, err0);
     }
 
     /** {@inheritDoc} */
     @Override public void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res) {
-        GridCacheReturn opRes0 = null;
+        GridCacheReturn opRes0;
+        CachePartialUpdateCheckedException err0;
 
         synchronized (mux) {
             if (futId == null || futId != res.futureId())
@@ -281,9 +340,10 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
                 if (singleReq.onDhtResponse(cctx, nodeId, res)) {
                     opRes0 = opRes;
-
-                    assert opRes0 != null;
+                    err0 = err;
                 }
+                else
+                    return;
             }
             else {
                 reqState = mappings != null ? mappings.get(res.primaryId()) : null;
@@ -299,16 +359,20 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
                         if (mappings.size() == resCnt) {
                             opRes0 = opRes;
-
-                            assert opRes0 != null;
+                            err0 = err;
                         }
+                        else
+                            return;
                     }
+                    else
+                        return;
                 }
+                else
+                    return;
             }
         }
 
-        if (opRes0 != null)
-            onDone(opRes0);
+        onDone(opRes0, err0);
     }
 
     /** {@inheritDoc} */

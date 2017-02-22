@@ -24,11 +24,8 @@ import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.GridCacheContext;
-import org.apache.ignite.internal.processors.cache.GridCacheEntryRemovedException;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
-import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheEntry;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
-import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
@@ -42,53 +39,29 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     /** */
     private static final long serialVersionUID = 0L;
 
-    /** Future keys. */
-    private KeyCacheObject key;
-
-    /** Entries with readers. */
-    private GridDhtCacheEntry nearReaderEntry;
-
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
      * @param updateReq Update request.
-     * @param updateRes Update response.
      */
     GridDhtAtomicSingleUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
-        super(cctx,
-            writeVer,
-            updateReq,
-            updateRes);
+        super(cctx, writeVer, updateReq);
     }
 
     /** {@inheritDoc} */
     @Override protected void addDhtKey(KeyCacheObject key, List<ClusterNode> dhtNodes) {
-        assert this.key == null || this.key.equals(key) : this.key;
-
         if (mappings == null)
             mappings = U.newHashMap(dhtNodes.size());
-
-        this.key = key;
     }
 
     /** {@inheritDoc} */
     @Override protected void addNearKey(KeyCacheObject key, Collection<UUID> readers) {
-        assert this.key == null || this.key.equals(key) : this.key;
-
         if (mappings == null)
             mappings = U.newHashMap(readers.size());
-
-        this.key = key;
-    }
-
-    /** {@inheritDoc} */
-    @Override protected void addNearReaderEntry(GridDhtCacheEntry entry) {
-        nearReaderEntry = entry;
     }
 
     /** {@inheritDoc} */
@@ -139,34 +112,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
         }
     }
 
-    /** {@inheritDoc} */
-    @Override public void onResult(UUID nodeId, GridDhtAtomicUpdateResponse updateRes) {
-        if (log.isDebugEnabled())
-            log.debug("Received DHT atomic update future result [nodeId=" + nodeId + ", updateRes=" + updateRes + ']');
-
-        if (updateRes.error() != null)
-            this.updateRes.addFailedKeys(updateRes.failedKeys(), updateRes.error());
-
-        if (!F.isEmpty(updateRes.nearEvicted())) {
-            try {
-                assert nearReaderEntry != null;
-
-                nearReaderEntry.removeReader(nodeId, updateRes.messageId());
-            }
-            catch (GridCacheEntryRemovedException e) {
-                if (log.isDebugEnabled())
-                    log.debug("Entry with evicted reader was removed [entry=" + nearReaderEntry + ", err=" + e + ']');
-            }
-        }
-
-        registerResponse(nodeId, false);
-    }
-
-    /** {@inheritDoc} */
-    @Override protected void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err) {
-        updateRes.addFailedKey(key, err);
-    }
-
     /**
      * @param ttl TTL.
      * @param conflictExpireTime Conflict expire time.
@@ -183,6 +128,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(GridDhtAtomicSingleUpdateFuture.class, this);
+        return S.toString(GridDhtAtomicSingleUpdateFuture.class, this, "super", super.toString());
     }
 }

@@ -121,10 +121,12 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
     /** {@inheritDoc} */
     @Override public boolean onNodeLeft(UUID nodeId) {
+        GridNearAtomicAbstractUpdateRequest req;
+
         GridNearAtomicUpdateResponse res = null;
 
-        GridNearAtomicAbstractUpdateRequest req;
         GridCacheReturn opRes0 = null;
+        CachePartialUpdateCheckedException err0 = null;
 
         synchronized (mux) {
             if (reqState == null)
@@ -148,9 +150,10 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             else {
                 if (reqState.onNodeLeft(nodeId)) {
                     opRes0 = opRes;
-
-                    assert opRes0 != null;
+                    err0 = err;
                 }
+                else
+                    return false;
             }
         }
 
@@ -163,8 +166,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
             onPrimaryResponse(nodeId, res, true);
         }
-        else if (opRes0 != null)
-            onDone(opRes0);
+        else
+            onDone(opRes0, err0);
 
         return false;
     }
@@ -181,8 +184,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         GridCacheReturn ret = (GridCacheReturn)res;
 
-        Object retval =
-            res == null ? null : rawRetval ? ret : (this.retval || op == TRANSFORM) ?
+        Object retval = res == null ? null : rawRetval ? ret : (this.retval || op == TRANSFORM) ?
                 cctx.unwrapBinaryIfNeeded(ret.value(), keepBinary) : ret.success();
 
         if (op == TRANSFORM && retval == null)
@@ -202,7 +204,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
     /** {@inheritDoc} */
     @Override public void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res) {
-        GridCacheReturn opRes0 = null;
+        GridCacheReturn opRes0;
+        CachePartialUpdateCheckedException err0;
 
         synchronized (mux) {
             if (futId == null || futId != res.futureId())
@@ -212,25 +215,25 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
             if (reqState.onMappingReceived(cctx, res)) {
                 opRes0 = opRes;
-
-                assert opRes0 != null;
+                err0 = err;
             }
+            else
+                return;
         }
 
-        if (opRes0 != null)
-            onDone(opRes0);
+        onDone(opRes0, err0);
     }
 
     /** {@inheritDoc} */
     @Override public void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res) {
-        GridCacheReturn opRes0 = null;
+        GridCacheReturn opRes0;
+        CachePartialUpdateCheckedException err0;
 
         synchronized (mux) {
             if (futId == null || futId != res.futureId())
                 return;
 
             assert reqState != null;
-
             assert reqState.req.nodeId().equals(res.primaryId());
 
             if (opRes == null && res.hasResult())
@@ -238,13 +241,13 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
             if (reqState.onDhtResponse(cctx, nodeId, res)) {
                 opRes0 = opRes;
-
-                assert opRes0 != null;
+                err0 = err;
             }
+            else
+                return;
         }
 
-        if (opRes0 != null)
-            onDone(opRes0);
+        onDone(opRes0, err0);
     }
 
     /** {@inheritDoc} */

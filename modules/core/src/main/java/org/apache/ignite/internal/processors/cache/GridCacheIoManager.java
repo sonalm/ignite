@@ -366,6 +366,9 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
             if (depEnabled)
                 cctx.deploy().ignoreOwnership(true);
 
+//            if (!cacheMsg.partitionExchangeMessage())
+//                log.info("Message [from=" + nodeId + ", msg=" + cacheMsg + ']');
+
             unmarshall(nodeId, cacheMsg);
 
             if (cacheMsg.classError() != null)

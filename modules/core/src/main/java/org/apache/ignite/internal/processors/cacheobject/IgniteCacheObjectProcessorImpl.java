@@ -366,10 +366,10 @@ public class IgniteCacheObjectProcessorImpl extends GridProcessorAdapter impleme
 
                     Object val = ctx.processor().unmarshal(ctx, valBytes, ldr);
 
-                    return new KeyCacheObjectImpl(val, valBytes);
+                    return new KeyCacheObjectImpl(val, valBytes, partition());
                 }
 
-                return new KeyCacheObjectImpl(val, valBytes);
+                return new KeyCacheObjectImpl(val, valBytes, partition());
             }
             catch (IgniteCheckedException e) {
                 throw new IgniteException("Failed to marshal object: " + val, e);

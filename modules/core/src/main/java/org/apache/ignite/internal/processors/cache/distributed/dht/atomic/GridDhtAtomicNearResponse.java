@@ -115,6 +115,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         setFlag(true, DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
     }
 
+    /**
+     * @return {@code True} if message is sent from primary when DHT node fails.
+     */
     boolean primaryDhtFailureResponse() {
         return isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
     }
@@ -146,7 +149,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      * @return Operation result.
      */
     public GridCacheReturn result() {
-        assert hasResult();
+        assert hasResult() : this;
 
         return new GridCacheReturn(true, isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK));
     }
@@ -154,7 +157,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     /**
      * @return {@code True} if response contains operation result.
      */
-    public boolean hasResult() {
+    boolean hasResult() {
         return isFlag(DHT_ATOMIC_HAS_RESULT_MASK);
     }
 

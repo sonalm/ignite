@@ -1825,7 +1825,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                         boolean sndPrevVal = !top.rebalanceFinished(req.topologyVersion());
 
-                        dhtFut = createDhtFuture(ver, req, res, false);
+                        dhtFut = createDhtFuture(ver, req, false);
 
                         expiry = expiryPolicy(req.expiry());
 
@@ -1845,7 +1845,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                                 locked,
                                 ver,
                                 dhtFut,
-                                completionCb,
                                 ctx.isDrEnabled(),
                                 taskName,
                                 expiry,
@@ -1946,7 +1945,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         else {
             // If there are backups, map backup update future.
             if (dhtFut != null) {
-                dhtFut.map(completionCb, res.returnValue());
+                dhtFut.map(res, completionCb, res.returnValue());
                 // Otherwise, complete the call.
             }
             else
@@ -1966,7 +1965,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param locked Locked entries.
      * @param ver Assigned version.
      * @param dhtFut Optional DHT future.
-     * @param completionCb Completion callback to invoke when DHT future is completed.
      * @param replicate Whether replication is enabled.
      * @param taskName Task name.
      * @param expiry Expiry policy.
@@ -1983,7 +1981,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         final List<GridDhtCacheEntry> locked,
         final GridCacheVersion ver,
         @Nullable GridDhtAtomicAbstractUpdateFuture dhtFut,
-        final GridDhtAtomicCache.UpdateReplyClosure completionCb,
         final boolean replicate,
         final String taskName,
         @Nullable final IgniteCacheExpiryPolicy expiry,
@@ -2479,7 +2476,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     dhtFut);
 
                 if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                    dhtFut = createDhtFuture(ver, req, res, true);
+                    dhtFut = createDhtFuture(ver, req, true);
 
                     readersOnly = true;
                 }
@@ -2610,7 +2607,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param rmvKeys Keys to remove.
      * @param entryProcessorMap Entry processors.
      * @param dhtFut DHT update future if has backups.
-     * @param completionCb Completion callback to invoke when DHT future is completed.
      * @param req Request.
      * @param res Response.
      * @param replicate Whether replication is enabled.
@@ -2785,7 +2781,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     batchRes.addDeleted(entry, updRes, entries);
 
                     if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                        dhtFut = createDhtFuture(ver, req, res, true);
+                        dhtFut = createDhtFuture(ver, req, true);
 
                         batchRes.readersOnly(true);
                     }
@@ -3104,20 +3100,18 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      *
      * @param writeVer Write version.
      * @param updateReq Update request.
-     * @param updateRes Update response.
      * @param force If {@code true} then creates future without optimizations checks.
      * @return Backup update future or {@code null} if there are no backups.
      */
     @Nullable private GridDhtAtomicAbstractUpdateFuture createDhtFuture(
         GridCacheVersion writeVer,
         GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes,
         boolean force
     ) {
         if (updateReq.size() == 1)
-            return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq, updateRes);
+            return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq);
         else
-            return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq, updateRes);
+            return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq);
 //        if (!force) {
 //            if (updateReq.fastMap())
 //                return null;
@@ -3192,6 +3186,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             msgLog.debug("Received DHT atomic update request [futId=" + req.futureId() +
                 ", writeVer=" + req.writeVersion() + ", node=" + nodeId + ']');
         }
+
+        assert req.partition() >= 0 : req;
 
         GridCacheVersion ver = req.writeVersion();
 
@@ -3298,12 +3294,14 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             List<KeyCacheObject> nearEvicted =
                 ((GridNearAtomicCache<K, V>)near()).processDhtAtomicUpdateRequest(nodeId, req, nearRes);
 
-            dhtRes = new GridDhtAtomicUpdateResponse(ctx.cacheId(),
-                req.partition(),
-                req.futureId(),
-                ctx.deploymentEnabled());
+            if (nearEvicted != null) {
+                dhtRes = new GridDhtAtomicUpdateResponse(ctx.cacheId(),
+                    req.partition(),
+                    req.futureId(),
+                    ctx.deploymentEnabled());
 
-            dhtRes.nearEvicted(nearEvicted);
+                dhtRes.nearEvicted(nearEvicted);
+            }
         }
 
         if (nearRes != null) {
@@ -3433,7 +3431,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
             GridDhtAtomicDeferredUpdateResponse msg = resMap.get(primaryId);
 
-            if (msg.timeoutSender() == this) {
+            if (msg != null && msg.timeoutSender() == this) {
                 msg.timeoutSender(null);
 
                 resMap.remove(primaryId);
@@ -3627,19 +3625,39 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     @SuppressWarnings("unchecked")
     private void processDhtAtomicUpdateResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
-        GridDhtAtomicAbstractUpdateFuture updateFut = (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
+        assert !F.isEmpty(res.nearEvicted()) || res.error() != null : res;
 
-        if (updateFut != null) {
-            if (msgLog.isDebugEnabled()) {
-                msgLog.debug("Received DHT atomic update response [futId=" + res.futureId() +
-                    ", writeVer=" + updateFut.writeVersion() + ", node=" + nodeId + ']');
+        if (!F.isEmpty(res.nearEvicted())) {
+            for (KeyCacheObject key : res.nearEvicted()) {
+                try {
+                    GridDhtCacheEntry entry = (GridDhtCacheEntry)ctx.cache().peekEx(key);
+
+                    if (entry != null)
+                        entry.removeReader(nodeId, res.messageId());
+                }
+                catch (GridCacheEntryRemovedException e) {
+                    if (log.isDebugEnabled())
+                        log.debug("Entry with evicted reader was removed [key=" + key + ", err=" + e + ']');
+                }
             }
-
-            updateFut.onResult(nodeId, res);
         }
-        else {
-            U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +
-                ", node=" + nodeId + ", res=" + res + ']');
+
+        if (res.error() != null) {
+            GridDhtAtomicAbstractUpdateFuture updateFut =
+                (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
+
+            if (updateFut != null) {
+                if (msgLog.isDebugEnabled()) {
+                    msgLog.debug("Received DHT atomic update response [futId=" + res.futureId() +
+                        ", writeVer=" + updateFut.writeVersion() + ", node=" + nodeId + ']');
+                }
+
+                updateFut.onDhtErrorResponse(nodeId, res);
+            }
+            else {
+                U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +
+                    ", node=" + nodeId + ", res=" + res + ']');
+            }
         }
     }
 

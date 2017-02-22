@@ -42,22 +42,22 @@ import org.jetbrains.annotations.Nullable;
  */
 public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessage implements GridCacheDeployable {
     /** Skip store flag bit mask. */
-    public static final int DHT_ATOMIC_SKIP_STORE_FLAG_MASK = 0x01;
+    static final int DHT_ATOMIC_SKIP_STORE_FLAG_MASK = 0x01;
 
     /** Keep binary flag. */
-    public static final int DHT_ATOMIC_KEEP_BINARY_FLAG_MASK = 0x02;
+    static final int DHT_ATOMIC_KEEP_BINARY_FLAG_MASK = 0x02;
 
     /** Near cache key flag. */
-    public static final int DHT_ATOMIC_NEAR_FLAG_MASK = 0x04;
+    static final int DHT_ATOMIC_NEAR_FLAG_MASK = 0x04;
 
     /** */
-    public static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
+    static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
 
     /** */
-    public static final int DHT_ATOMIC_RESULT_SUCCESS_MASK = 0x10;
+    static final int DHT_ATOMIC_RESULT_SUCCESS_MASK = 0x10;
 
     /** */
-    public static final int DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE = 0x20;
+    static final int DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE = 0x20;
 
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
@@ -171,6 +171,10 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         return !onRes && (onRes = true);
     }
 
+    boolean hasResponse() {
+        return onRes;
+    }
+
     /** {@inheritDoc} */
     @Override public boolean addDeploymentInfo() {
         return addDepInfo;
@@ -199,7 +203,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
      * @param conflictExpireTime Conflict expire time (optional).
      * @param conflictVer Conflict version (optional).
      * @param addPrevVal If {@code true} adds previous value.
-     * @param partId Partition.
      * @param prevVal Previous value.
      * @param updateCntr Update counter.
      */
@@ -210,7 +213,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         long conflictExpireTime,
         @Nullable GridCacheVersion conflictVer,
         boolean addPrevVal,
-        int partId,
         @Nullable CacheObject prevVal,
         long updateCntr
     );
@@ -286,12 +288,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
      * @return Key.
      */
     public abstract KeyCacheObject key(int idx);
-
-    /**
-     * @param idx Partition index.
-     * @return Partition id.
-     */
-    public abstract int partitionId(int idx);
 
     /**
      * @param updCntr Update counter.
