@@ -3367,6 +3367,9 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     private class DeferredResponseClosure implements IgniteInClosure<IgniteException>, Runnable {
         /** */
+        private static final long serialVersionUID = 0L;
+
+        /** */
         private final int part;
 
         /** */
