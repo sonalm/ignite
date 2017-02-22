@@ -41,7 +41,6 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheE
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
 import org.apache.ignite.internal.util.tostring.GridToStringExclude;
-import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.CI1;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.S;
@@ -401,8 +400,11 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheReturn ret) {
         boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
-        boolean needReplyToNear = repliedToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
-            ret.hasValue() || updateReq.nodeId().equals(cctx.localNodeId());
+        boolean needReplyToNear = repliedToNear =
+            updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
+            ret.hasValue() ||
+            updateRes.nearVersion() != null ||
+            updateReq.nodeId().equals(cctx.localNodeId());
 
         List<UUID> dhtNodes = null;
 

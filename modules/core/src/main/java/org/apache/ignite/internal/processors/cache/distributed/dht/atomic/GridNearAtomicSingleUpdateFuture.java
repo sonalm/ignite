@@ -167,7 +167,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             onPrimaryResponse(nodeId, res, true);
         }
         else
-            onDone(opRes0, err0);
+            finishUpdateFuture(opRes0, err0);
 
         return false;
     }
@@ -221,7 +221,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 return;
         }
 
-        onDone(opRes0, err0);
+        finishUpdateFuture(opRes0, err0);
     }
 
     /** {@inheritDoc} */
@@ -247,7 +247,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 return;
         }
 
-        onDone(opRes0, err0);
+        finishUpdateFuture(opRes0, err0);
     }
 
     /** {@inheritDoc} */
@@ -656,6 +656,20 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             true);
 
         return req;
+    }
+
+    /**
+     * @param opRes Operation result.
+     * @param err Operation error.
+     */
+    private void finishUpdateFuture(GridCacheReturn opRes, CachePartialUpdateCheckedException err) {
+        if (nearEnabled) {
+            assert reqState.req.response() != null;
+
+            updateNear(reqState.req, reqState.req.response());
+        }
+
+        onDone(opRes, err);
     }
 
     /**

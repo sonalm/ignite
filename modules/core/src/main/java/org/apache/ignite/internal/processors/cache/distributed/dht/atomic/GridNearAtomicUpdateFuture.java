@@ -220,7 +220,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             onPrimaryResponse(nodeId, res, true);
         }
         else
-            onDone(opRes0, err0);
+            finishUpdateFuture(opRes0, err0);
 
         return false;
     }
@@ -318,7 +318,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             }
         }
 
-        onDone(opRes0, err0);
+        finishUpdateFuture(opRes0, err0);
     }
 
     /** {@inheritDoc} */
@@ -372,7 +372,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             }
         }
 
-        onDone(opRes0, err0);
+        finishUpdateFuture(opRes0, err0);
     }
 
     /** {@inheritDoc} */
@@ -583,6 +583,32 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         if (rcvAll)
             onDone(opRes0, err0);
+    }
+
+
+    /**
+     * @param opRes Operation result.
+     * @param err Operation error.
+     */
+    private void finishUpdateFuture(GridCacheReturn opRes, CachePartialUpdateCheckedException err) {
+        if (nearEnabled) {
+            if (mappings != null) {
+                for (PrimaryRequestState reqState : mappings.values()) {
+                    GridNearAtomicUpdateResponse res0 = reqState.req.response();
+
+                    assert res0 != null : reqState;
+
+                    updateNear(reqState.req, res0);
+                }
+            }
+            else {
+                assert singleReq != null && singleReq.req.response() != null;
+
+                updateNear(singleReq.req, singleReq.req.response());
+            }
+        }
+
+        onDone(opRes, err);
     }
 
     /**
