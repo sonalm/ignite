@@ -389,6 +389,13 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         return false;
     }
 
+    final void init(GridNearAtomicUpdateResponse updateRes, GridCacheReturn ret) {
+        repliedToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
+            ret.hasValue() ||
+            updateRes.nearVersion() != null ||
+            updateRes.nodeId().equals(cctx.localNodeId());
+    }
+
     /**
      * Sends requests to remote nodes.
      *
@@ -401,11 +408,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         GridCacheReturn ret) {
         boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
 
-        boolean needReplyToNear = repliedToNear =
-            updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
-            ret.hasValue() ||
-            updateRes.nearVersion() != null ||
-            updateRes.nodeId().equals(cctx.localNodeId());
+        boolean needReplyToNear = repliedToNear;
 
         List<UUID> dhtNodes = null;
 

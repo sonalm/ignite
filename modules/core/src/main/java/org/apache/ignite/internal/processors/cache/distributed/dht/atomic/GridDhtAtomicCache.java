@@ -1882,8 +1882,11 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         if (req.writeSynchronizationMode() != FULL_ASYNC)
                             req.cleanup(!node.isLocal());
 
-                        if (dhtFut != null)
+                        if (dhtFut != null) {
+                            dhtFut.init(res, res.returnValue());
+
                             ctx.mvcc().addAtomicFuture(dhtFut.id(), dhtFut);
+                        }
                     }
                     else {
                         // Should remap all keys.
