@@ -143,7 +143,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
     /** */
     private static final boolean IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK =
-        IgniteSystemProperties.getBoolean("IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK", false);
+        IgniteSystemProperties.getBoolean("IGNITE_ATOMIC_DHT_REPLY_AFTER_ACK", true);
 
     /** */
     private final ThreadLocal<Map<UUID, GridDhtAtomicDeferredUpdateResponse>> defRes =
@@ -227,7 +227,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 if (req.writeSynchronizationMode() != FULL_ASYNC)
                     sendNearUpdateReply(res.nodeId(), res);
                 else {
-                    if (!F.isEmpty(res.remapKeys()))
+                    if (res.remapTopologyVersion() != null)
                         // Remap keys on primary node in FULL_ASYNC mode.
                         remapToNewPrimary(req);
                     else if (res.error() != null) {
@@ -1885,9 +1885,12 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         if (dhtFut != null)
                             ctx.mvcc().addAtomicFuture(dhtFut.id(), dhtFut);
                     }
-                    else
+                    else {
                         // Should remap all keys.
                         remap = true;
+
+                        res.remapTopologyVersion(top.topologyVersion());
+                    }
                 }
                 finally {
                     top.readUnlock();
@@ -1937,8 +1940,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         if (remap) {
             assert dhtFut == null;
-
-            res.remapKeys(req.keys());
 
             completionCb.apply(req, res);
         }
@@ -3616,7 +3617,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             updateFut.onDhtResponse(nodeId, res);
         }
         else {
-            U.warn(msgLog, "Failed to find update future DHT atomic near response [futId=" + res.futureId() +
+            U.warn(msgLog, "Failed to find update future for DHT atomic near response [futId=" + res.futureId() +
                 ", node=" + nodeId +
                 ", res=" + res + ']');
         }

@@ -28,6 +28,7 @@ import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.internal.GridDirectCollection;
 import org.apache.ignite.internal.GridDirectTransient;
+import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.GridCacheContext;
 import org.apache.ignite.internal.processors.cache.GridCacheDeployable;
@@ -78,10 +79,8 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     @GridDirectCollection(KeyCacheObject.class)
     private volatile Collection<KeyCacheObject> failedKeys;
 
-    /** Keys that should be remapped. */
-    @GridToStringInclude
-    @GridDirectCollection(KeyCacheObject.class)
-    private List<KeyCacheObject> remapKeys;
+    /** */
+    private AffinityTopologyVersion remapTopVer;
 
     /** Indexes of keys for which values were generated on primary node (used if originating node has near cache). */
     @GridDirectCollection(int.class)
@@ -216,17 +215,17 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     }
 
     /**
-     * @param remapKeys Remap keys.
+     * @param remapTopVer Topology version to remap update.
      */
-    public void remapKeys(List<KeyCacheObject> remapKeys) {
-        this.remapKeys = remapKeys;
+    public void remapTopologyVersion(AffinityTopologyVersion remapTopVer) {
+        this.remapTopVer = remapTopVer;
     }
 
     /**
-     * @return Remap keys.
+     * @return Topology version if update should be remapped.
      */
-    public Collection<KeyCacheObject> remapKeys() {
-        return remapKeys;
+    @Nullable public AffinityTopologyVersion remapTopologyVersion() {
+        return remapTopVer;
     }
 
     /**
@@ -429,8 +428,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
         prepareMarshalCacheObjects(failedKeys, cctx);
 
-        prepareMarshalCacheObjects(remapKeys, cctx);
-
         prepareMarshalCacheObjects(nearVals, cctx);
 
         if (ret != null)
@@ -447,8 +444,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
         GridCacheContext cctx = ctx.cacheContext(cacheId);
 
         finishUnmarshalCacheObjects(failedKeys, cctx, ldr);
-
-        finishUnmarshalCacheObjects(remapKeys, cctx, ldr);
 
         finishUnmarshalCacheObjects(nearVals, cctx, ldr);
 
@@ -553,7 +548,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
                 writer.incrementState();
 
             case 14:
-                if (!writer.writeCollection("remapKeys", remapKeys, MessageCollectionItemType.MSG))
+                if (!writer.writeMessage("remapTopVer", remapTopVer))
                     return false;
 
                 writer.incrementState();
@@ -669,7 +664,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
                 reader.incrementState();
 
             case 14:
-                remapKeys = reader.readCollection("remapKeys", MessageCollectionItemType.MSG);
+                remapTopVer = reader.readMessage("remapTopVer");
 
                 if (!reader.isLastRead())
                     return false;

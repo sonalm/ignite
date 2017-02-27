@@ -36,6 +36,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheMvccManager;
 import org.apache.ignite.internal.processors.cache.GridCacheOperation;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
+import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
@@ -111,21 +112,23 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
     protected boolean topLocked;
 
     /** Remap count. */
+    @GridToStringInclude
     protected int remapCnt;
 
     /** Current topology version. */
+    @GridToStringInclude
     protected AffinityTopologyVersion topVer = AffinityTopologyVersion.ZERO;
 
-    /** Topology version when got mapping error. */
-    protected AffinityTopologyVersion mapErrTopVer;
-
     /** */
-    protected int resCnt;
+    @GridToStringInclude
+    protected AffinityTopologyVersion remapTopVer;
 
     /** Error. */
+    @GridToStringInclude
     protected CachePartialUpdateCheckedException err;
 
     /** Future ID. */
+    @GridToStringInclude
     protected Long futId;
 
     /** Operation result. */
@@ -363,6 +366,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         private Set<UUID> rcvd;
 
         /** */
+        @GridToStringInclude
         private Set<UUID> mapping;
 
         /** */
@@ -486,7 +490,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             assert onRes;
 
-            if (res.error() != null || res.remapKeys() != null)
+            if (res.error() != null || res.remapTopologyVersion() != null)
                 return true;
 
             assert res.returnValue() != null : res;
@@ -501,7 +505,14 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
         /** {@inheritDoc} */
         @Override public String toString() {
-            return S.toString(PrimaryRequestState.class, this);
+            return S.toString(PrimaryRequestState.class, this,
+                "node", req.nodeId(),
+                "rcvdRes", req.response() != null);
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override public String toString() {
+        return S.toString(GridNearAtomicAbstractUpdateFuture.class, this, super.toString());
     }
 }

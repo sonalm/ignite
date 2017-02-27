@@ -335,9 +335,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                     return false;
             }
 
-            if (resCnt0 == mappings.size())
-                onDone();
-
             if (needReplyToNear) {
                 assert !F.isEmpty(mappings);
 
@@ -347,7 +344,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
                 GridDhtAtomicNearResponse res = new GridDhtAtomicNearResponse(cctx.cacheId(),
                     req.partition(),
-                    req.futureId(),
+                    req.nearFutureId(),
                     cctx.localNodeId(),
                     dhtNodes,
                     req.flags());
@@ -383,6 +380,9 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                 }
             }
 
+            if (resCnt0 == mappings.size())
+                onDone();
+
             return true;
         }
 
@@ -400,11 +400,12 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         GridDhtAtomicCache.UpdateReplyClosure completionCb,
         GridCacheReturn ret) {
         boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
+
         boolean needReplyToNear = repliedToNear =
             updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
             ret.hasValue() ||
             updateRes.nearVersion() != null ||
-            updateReq.nodeId().equals(cctx.localNodeId());
+            updateRes.nodeId().equals(cctx.localNodeId());
 
         List<UUID> dhtNodes = null;
 
@@ -439,7 +440,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                     }
                     catch (IgniteCheckedException e) {
                         U.error(msgLog, "Failed to send mapping response [futId=" + futId +
-                            ", writeVer=" + writeVer + ", node=" + updateRes.nodeId() + ']');
+                            ", writeVer=" + writeVer +
+                            ", node=" + updateRes.nodeId() + ']');
                     }
                 }
             }
@@ -498,6 +500,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      */
     public final void onDhtErrorResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
         // TODO IGNITE-4705.
+        assert false;
     }
 
     /**
@@ -570,7 +573,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             Map<UUID, String> dhtRes = F.viewReadOnly(mappings,
                 new IgniteClosure<GridDhtAtomicAbstractUpdateRequest, String>() {
                     @Override public String apply(GridDhtAtomicAbstractUpdateRequest req) {
-                        return "[res" + req.hasResponse() +
+                        return "[res=" + req.hasResponse() +
                             ", size=" + req.size() +
                             ", nearSize=" + req.nearSize() + ']';
                     }

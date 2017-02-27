@@ -26,6 +26,8 @@ import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
+import org.apache.ignite.internal.util.tostring.GridToStringExclude;
+import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
@@ -56,9 +58,11 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** */
     @GridDirectCollection(UUID.class)
+    @GridToStringInclude
     private List<UUID> mapping;
 
     /** */
+    @GridToStringExclude
     private byte flags;
 
     /** */
@@ -365,6 +369,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(GridDhtAtomicNearResponse.class, this);
+        return S.toString(GridDhtAtomicNearResponse.class, this, "flags",
+            "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK) +
+            "|resOk=" + isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK) +
+            "|dhtFail=" + isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE));
     }
 }
