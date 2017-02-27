@@ -297,7 +297,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
     /** {@inheritDoc} */
     @Override public final boolean onNodeLeft(UUID nodeId) {
-        boolean res = registerResponse(nodeId, true);
+        boolean res = registerResponse(nodeId, true, null);
 
         if (res && msgLog.isDebugEnabled()) {
             msgLog.debug("DTH update fut, node left [futId=" + futId + ", writeVer=" + writeVer +
@@ -312,7 +312,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      * @param nodeErr Node error flag.
      * @return {@code True} if request found.
      */
-    private boolean registerResponse(UUID nodeId, boolean nodeErr) {
+    private boolean registerResponse(UUID nodeId, boolean nodeErr, UpdateErrors errors) {
         int resCnt0;
 
         GridDhtAtomicAbstractUpdateRequest req = mappings != null ? mappings.get(nodeId) : null;
@@ -322,7 +322,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         if (req != null) {
             synchronized (this) {
                 if (req.onResponse()) {
-                    if (nodeErr && !repliedToNear)
+                    if (errors != null || (nodeErr && !repliedToNear))
                         needReplyToNear = repliedToNear = true;
 
                     resCnt0 = resCnt;
@@ -348,6 +348,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                     cctx.localNodeId(),
                     dhtNodes,
                     req.flags());
+
+                res.errors(errors);
 
                 res.failedNodeId(nodeId);
 
@@ -457,7 +459,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     }
 
     /**
-     * @param nearReplyInfo {@code True} if need add inforamtion for near node response.
+     * @param nearReplyInfo {@code True} if need add information for near node response.
      * @param dhtNodes DHT nodes.
      * @param ret Return value.
      */
@@ -486,24 +488,23 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                         ", writeVer=" + writeVer + ", node=" + req.nodeId() + ']');
                 }
 
-                registerResponse(req.nodeId(), true);
+                registerResponse(req.nodeId(), true, null);
             }
             catch (IgniteCheckedException ignored) {
                 U.error(msgLog, "Failed to send request [futId=" + futId +
                     ", writeVer=" + writeVer + ", node=" + req.nodeId() + ']');
 
-                registerResponse(req.nodeId(), true);
+                registerResponse(req.nodeId(), true, null);
             }
         }
     }
 
     /**
      * @param nodeId Node ID.
-     * @param res Response.
+     * @param errors Response.
      */
-    public final void onDhtErrorResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
-        // TODO IGNITE-4705.
-        assert false;
+    public final void onDhtErrorResponse(UUID nodeId, UpdateErrors errors) {
+        registerResponse(nodeId, false, errors);
     }
 
     /**
@@ -515,7 +516,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         if (log.isDebugEnabled())
             log.debug("Received deferred DHT atomic update future result [nodeId=" + nodeId + ']');
 
-        registerResponse(nodeId, false);
+        registerResponse(nodeId, false, null);
     }
 
     /**

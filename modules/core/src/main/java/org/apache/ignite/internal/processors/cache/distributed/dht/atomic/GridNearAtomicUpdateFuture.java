@@ -381,6 +381,16 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             }
         }
 
+        UpdateErrors errors = res.errors();
+
+        if (errors != null) {
+            assert errors.error() != null;
+
+            onDone(errors.error());
+
+            return;
+        }
+
         finishUpdateFuture(opRes0, err0, remapTopVer0);
     }
 

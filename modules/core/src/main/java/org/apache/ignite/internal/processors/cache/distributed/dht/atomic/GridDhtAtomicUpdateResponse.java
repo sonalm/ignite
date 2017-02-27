@@ -37,6 +37,7 @@ import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * DHT atomic cache backup update response.
@@ -51,17 +52,8 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     /** Future version. */
     private long futId;
 
-    /** Failed keys. */
-    @GridToStringInclude
-    @GridDirectCollection(KeyCacheObject.class)
-    private List<KeyCacheObject> failedKeys;
-
-    /** Update error. */
-    @GridDirectTransient
-    private IgniteCheckedException err;
-
-    /** Serialized update error. */
-    private byte[] errBytes;
+    /** */
+    private UpdateErrors errors;
 
     /** Evicted readers. */
     @GridToStringInclude
@@ -91,6 +83,13 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
         this.addDepInfo = addDepInfo;
     }
 
+    /**
+     * @return Errors.
+     */
+    @Nullable UpdateErrors errors() {
+        return errors;
+    }
+
     /** {@inheritDoc} */
     @Override public int lookupIndex() {
         return CACHE_MSG_IDX;
@@ -109,37 +108,15 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
      * @param err Error.
      */
     public void onError(IgniteCheckedException err){
-        this.err = err;
+        if (errors == null)
+            errors = new UpdateErrors();
+
+        errors.onError(err);
     }
 
     /** {@inheritDoc} */
     @Override public IgniteCheckedException error() {
-        return err;
-    }
-
-    /**
-     * @return Failed keys.
-     */
-    public Collection<KeyCacheObject> failedKeys() {
-        return failedKeys;
-    }
-
-    /**
-     * Adds key to collection of failed keys.
-     *
-     * @param key Key to add.
-     * @param e Error cause.
-     */
-    public void addFailedKey(KeyCacheObject key, Throwable e) {
-        if (failedKeys == null)
-            failedKeys = new ArrayList<>();
-
-        failedKeys.add(key);
-
-        if (err == null)
-            err = new IgniteCheckedException("Failed to update keys on primary node.");
-
-        err.addSuppressed(e);
+        return errors != null ? errors.error() : null;
     }
 
     /**
@@ -179,12 +156,10 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         GridCacheContext cctx = ctx.cacheContext(cacheId);
 
-        prepareMarshalCacheObjects(failedKeys, cctx);
-
         prepareMarshalCacheObjects(nearEvicted, cctx);
 
-        if (errBytes == null)
-            errBytes = U.marshal(ctx, err);
+        if (errors != null)
+            errors.prepareMarshal(this, cctx);
     }
 
     /** {@inheritDoc} */
@@ -193,12 +168,10 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         GridCacheContext cctx = ctx.cacheContext(cacheId);
 
-        finishUnmarshalCacheObjects(failedKeys, cctx, ldr);
-
         finishUnmarshalCacheObjects(nearEvicted, cctx, ldr);
 
-        if (errBytes != null && err == null)
-            err = U.unmarshal(ctx, errBytes, U.resolveClassLoader(ldr, ctx.gridConfig()));
+        if (errors != null)
+            errors.finishUnmarshal(this, cctx, ldr);
     }
 
     /** {@inheritDoc} */
@@ -227,30 +200,24 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeByteArray("errBytes", errBytes))
+                if (!writer.writeMessage("errors", errors))
                     return false;
 
                 writer.incrementState();
 
             case 4:
-                if (!writer.writeCollection("failedKeys", failedKeys, MessageCollectionItemType.MSG))
-                    return false;
-
-                writer.incrementState();
-
-            case 5:
                 if (!writer.writeLong("futId", futId))
                     return false;
 
                 writer.incrementState();
 
-            case 6:
+            case 5:
                 if (!writer.writeCollection("nearEvicted", nearEvicted, MessageCollectionItemType.MSG))
                     return false;
 
                 writer.incrementState();
 
-            case 7:
+            case 6:
                 if (!writer.writeInt("partId", partId))
                     return false;
 
@@ -273,7 +240,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         switch (reader.state()) {
             case 3:
-                errBytes = reader.readByteArray("errBytes");
+                errors = reader.readMessage("errors");
 
                 if (!reader.isLastRead())
                     return false;
@@ -281,14 +248,6 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
                 reader.incrementState();
 
             case 4:
-                failedKeys = reader.readCollection("failedKeys", MessageCollectionItemType.MSG);
-
-                if (!reader.isLastRead())
-                    return false;
-
-                reader.incrementState();
-
-            case 5:
                 futId = reader.readLong("futId");
 
                 if (!reader.isLastRead())
@@ -296,7 +255,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
                 reader.incrementState();
 
-            case 6:
+            case 5:
                 nearEvicted = reader.readCollection("nearEvicted", MessageCollectionItemType.MSG);
 
                 if (!reader.isLastRead())
@@ -304,7 +263,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
                 reader.incrementState();
 
-            case 7:
+            case 6:
                 partId = reader.readInt("partId");
 
                 if (!reader.isLastRead())
@@ -324,7 +283,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 8;
+        return 7;
     }
 
     /** {@inheritDoc} */

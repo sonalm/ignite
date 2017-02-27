@@ -250,6 +250,16 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 return;
         }
 
+        UpdateErrors errors = res.errors();
+
+        if (errors != null) {
+            assert errors.error() != null;
+
+            onDone(errors.error());
+
+            return;
+        }
+
         finishUpdateFuture(opRes0, err0, remapTopVer0);
     }
 
@@ -258,7 +268,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
     @Override public void onPrimaryResponse(UUID nodeId, GridNearAtomicUpdateResponse res, boolean nodeErr) {
         GridNearAtomicAbstractUpdateRequest req;
 
-        AffinityTopologyVersion remapTopVer0 = null;
+        AffinityTopologyVersion remapTopVer0;
 
         GridCacheReturn opRes0 = null;
         CachePartialUpdateCheckedException err0 = null;
@@ -279,11 +289,12 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 assert remapTopVer == null : remapTopVer;
 
-                remapTopVer = remapTopVer0 = res.remapTopologyVersion();
+                remapTopVer = res.remapTopologyVersion();
             }
             else if (res.error() != null) {
-                // TODO IGNITE-4705: assert only 1 key?
                 if (res.failedKeys() != null) {
+                    assert res.failedKeys().size() == 1 : res.failedKeys();
+
                     if (err == null)
                         err = new CachePartialUpdateCheckedException(
                             "Failed to update keys (retry update if possible).");

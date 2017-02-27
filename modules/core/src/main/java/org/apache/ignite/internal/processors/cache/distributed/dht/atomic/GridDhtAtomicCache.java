@@ -3649,7 +3649,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             }
         }
 
-        if (res.error() != null) {
+        if (res.errors() != null) {
             GridDhtAtomicAbstractUpdateFuture updateFut =
                 (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
 
@@ -3659,7 +3659,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         ", writeVer=" + updateFut.writeVersion() + ", node=" + nodeId + ']');
                 }
 
-                updateFut.onDhtErrorResponse(nodeId, res);
+                updateFut.onDhtErrorResponse(nodeId, res.errors());
             }
             else {
                 U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +

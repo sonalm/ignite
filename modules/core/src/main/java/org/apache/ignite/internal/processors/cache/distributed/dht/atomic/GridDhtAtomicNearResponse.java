@@ -32,6 +32,7 @@ import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
+import org.jetbrains.annotations.Nullable;
 
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE;
@@ -99,6 +100,14 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         this.primaryId = primaryId;
         this.mapping = mapping;
         this.flags = flags;
+    }
+
+    @Nullable UpdateErrors errors() {
+        return errors;
+    }
+
+    void errors(UpdateErrors errors) {
+        this.errors = errors;
     }
 
     /**
