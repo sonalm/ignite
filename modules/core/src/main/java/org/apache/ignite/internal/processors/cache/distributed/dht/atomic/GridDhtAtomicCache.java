@@ -1330,8 +1330,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         CacheEntryPredicate[] filters = CU.filterArray(filter);
 
-        if (conflictPutVal == null &&
-            conflictRmvVer == null) {
+        if (conflictPutVal == null && conflictRmvVer == null) {
             return new GridNearAtomicSingleUpdateFuture(
                 ctx,
                 this,
@@ -1374,19 +1373,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
                 waitTopFut);
         }
-    }
-
-    /**
-     * Whether this is fast-map operation.
-     *
-     * @param filters Filters.
-     * @param op Operation.
-     * @return {@code True} if fast-map.
-     */
-    public boolean isFastMap(CacheEntryPredicate[] filters, GridCacheOperation op) {
-        return F.isEmpty(filters) && op != TRANSFORM && ctx.config().getWriteSynchronizationMode() == FULL_SYNC &&
-            ctx.config().getAtomicWriteOrderMode() == CLOCK &&
-            !(ctx.writeThrough() && ctx.config().getInterceptor() != null);
     }
 
     /**
@@ -1777,7 +1763,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         try {
             // If batch store update is enabled, we need to lock all entries.
             // First, need to acquire locks on cache entries, then check filter.
-            List<GridDhtCacheEntry> locked = lockEntries(req, req.topologyVersion());
+            List<GridDhtCacheEntry> locked = null;
 
             Collection<IgniteBiTuple<GridDhtCacheEntry, GridCacheVersion>> deleted = null;
 
@@ -1807,6 +1793,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                             return;
                         }
+
+                        locked = lockEntries(req, req.topologyVersion());
 
                         boolean hasNear = ctx.discovery().cacheNearNode(node, name());
 
@@ -1925,6 +1913,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 log.debug("Caught invalid partition exception for cache entry (will remap update request): " + req);
 
             remap = true;
+
+            res.remapTopologyVersion(ctx.topology().topologyVersion());
         }
         catch (Throwable e) {
             // At least RuntimeException can be thrown by the code above when GridCacheContext is cleaned and there is
@@ -2747,7 +2737,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         /*event*/true,
                         /*metrics*/true,
                         primary,
-                        ctx.config().getAtomicWriteOrderMode() == CLOCK, // Check version in CLOCK mode on primary node.
+                        /*verCheck*/false,
                         topVer,
                         null,
                         replicate ? primary ? DR_PRIMARY : DR_BACKUP : DR_NONE,
@@ -2898,11 +2888,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         return Collections.singletonList(entry);
                 }
                 catch (GridDhtInvalidPartitionException e) {
-                    // Ignore invalid partition exception in CLOCK ordering mode.
-                    if (ctx.config().getAtomicWriteOrderMode() == CLOCK)
-                        return Collections.singletonList(null);
-                    else
-                        throw e;
+                    throw e;
                 }
             }
         }
@@ -2917,11 +2903,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         locked.add(entry);
                     }
                     catch (GridDhtInvalidPartitionException e) {
-                        // Ignore invalid partition exception in CLOCK ordering mode.
-                        if (ctx.config().getAtomicWriteOrderMode() == CLOCK)
-                            locked.add(null);
-                        else
-                            throw e;
+                        throw e;
                     }
                 }
 
@@ -3075,7 +3057,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             drPutVals = null;
         }
 
-        final GridNearAtomicUpdateFuture updateFut = new GridNearAtomicUpdateFuture(
+        GridNearAtomicUpdateFuture updateFut = new GridNearAtomicUpdateFuture(
             ctx,
             this,
             ctx.config().getWriteSynchronizationMode(),

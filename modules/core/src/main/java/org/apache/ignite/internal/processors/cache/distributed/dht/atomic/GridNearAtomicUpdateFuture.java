@@ -183,7 +183,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     res = primaryFailedResponse(req, nodeId);
             }
             else {
-                assert mappings != null;
+                if (mappings == null)
+                    return false;
 
                 PrimaryRequestState reqState = mappings.get(nodeId);
 
@@ -419,7 +420,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 rcvAll = singleReq.onPrimaryResponse(cctx, res);
             }
             else {
-                assert mappings != null;
+                if (mappings == null)
+                    return;
 
                 PrimaryRequestState reqState = mappings.get(nodeId);
 

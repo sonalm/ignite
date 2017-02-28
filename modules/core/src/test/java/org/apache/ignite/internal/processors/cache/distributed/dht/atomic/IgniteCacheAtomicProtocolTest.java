@@ -22,20 +22,24 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
+import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.TestRecordingCommunicationSpi;
+import org.apache.ignite.internal.util.lang.GridAbsPredicate;
 import org.apache.ignite.internal.util.typedef.G;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteFuture;
 import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.TcpDiscoveryIpFinder;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
+import org.apache.ignite.testframework.GridTestUtils;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
 
 import static org.apache.ignite.cache.CacheAtomicityMode.ATOMIC;
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
 
 /**
@@ -54,6 +58,8 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
         IgniteConfiguration cfg = super.getConfiguration(gridName);
+
+        cfg.setConsistentId(gridName);
 
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
 
@@ -100,7 +106,7 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
         Ignite client = startGrid(4);
 
-        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1));
+        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
         IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
 
         awaitPartitionMapExchange();
@@ -152,7 +158,7 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
         Ignite client = startGrid(4);
 
-        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1));
+        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
         IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
 
         awaitPartitionMapExchange();
@@ -183,6 +189,93 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         stopGrid(backup.name());
 
         fut.get();
+
+        checkData(map);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testFullAsyncPutRemap() throws Exception {
+        fullAsyncRemap(false);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testFullAsyncPutAllRemap() throws Exception {
+        fullAsyncRemap(true);
+    }
+
+    /**
+     * @param putAll Test putAll flag.
+     * @throws Exception If failed.
+     */
+    private void fullAsyncRemap(boolean putAll) throws Exception {
+        Ignite srv0 = startGrid(0);
+
+        client = true;
+
+        Ignite clientNode = startGrid(1);
+
+        client = false;
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_ASYNC));
+
+        List<Integer> keys = primaryKeys(srv0.cache(TEST_CACHE), putAll ? 3 : 1);
+
+        testSpi(clientNode).blockMessages(GridNearAtomicSingleUpdateRequest.class, srv0.name());
+        testSpi(clientNode).blockMessages(GridNearAtomicFullUpdateRequest.class, srv0.name());
+
+        final Map<Integer, Integer> map = new HashMap<>();
+
+        for (Integer key : keys)
+            map.put(key, -key);
+
+        if (putAll)
+            nearCache.putAll(map);
+        else
+            nearCache.put(keys.get(0), map.get(keys.get(0)));
+
+        int nodeIdx = 2;
+
+        Affinity<Object> aff = clientNode.affinity(TEST_CACHE);
+
+        int keysMoved;
+
+        do {
+            startGrid(nodeIdx);
+
+            awaitPartitionMapExchange();
+
+            keysMoved = 0;
+
+            for (Integer key : keys) {
+                if (!aff.isPrimary(srv0.cluster().localNode(), key))
+                    keysMoved++;
+            }
+
+            if (keysMoved == keys.size())
+                break;
+
+            nodeIdx++;
+        }
+        while (nodeIdx < 10);
+
+        assertEquals(keys.size(), keysMoved);
+
+        testSpi(clientNode).stopBlock(true);
+
+        GridTestUtils.waitForCondition(new GridAbsPredicate() {
+            @Override public boolean apply() {
+                for (Integer key : map.keySet()) {
+                    if (nearCache.get(key) == null)
+                        return false;
+                }
+
+                return true;
+            }
+        }, 5000);
 
         checkData(map);
     }
@@ -231,14 +324,16 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
     /**
      * @param backups Number of backups.
+     * @param writeSync Cache write synchronization mode.
      * @return Cache configuration.
      */
-    private CacheConfiguration<Integer, Integer> cacheConfiguration(int backups) {
+    private CacheConfiguration<Integer, Integer> cacheConfiguration(int backups,
+        CacheWriteSynchronizationMode writeSync) {
         CacheConfiguration<Integer, Integer> ccfg = new CacheConfiguration<>();
 
         ccfg.setName(TEST_CACHE);
         ccfg.setAtomicityMode(ATOMIC);
-        ccfg.setWriteSynchronizationMode(FULL_SYNC);
+        ccfg.setWriteSynchronizationMode(writeSync);
         ccfg.setBackups(backups);
 
         return ccfg;

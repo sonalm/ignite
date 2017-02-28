@@ -53,6 +53,7 @@ public class IgniteMarshallerCacheConcurrentReadWriteTest extends GridCommonAbst
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
 
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
+        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
 
         CacheConfiguration ccfg = new CacheConfiguration();
 

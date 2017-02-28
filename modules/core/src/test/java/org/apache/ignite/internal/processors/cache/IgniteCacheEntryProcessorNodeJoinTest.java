@@ -79,6 +79,7 @@ public class IgniteCacheEntryProcessorNodeJoinTest extends GridCommonAbstractTes
         TcpCommunicationSpi commSpi = new TcpCommunicationSpi();
 
         commSpi.setSharedMemoryPort(-1);
+        commSpi.setIdleConnectionTimeout(500);
 
         cfg.setCommunicationSpi(commSpi);
 

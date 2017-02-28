@@ -47,7 +47,6 @@ public class KeyCacheObjectImpl extends CacheObjectAdapter implements KeyCacheOb
      */
     public KeyCacheObjectImpl(Object val, byte[] valBytes, int part) {
         assert val != null;
-        assert part >= 0 : part;
 
         this.val = val;
         this.valBytes = valBytes;
