@@ -120,6 +120,7 @@ public class CacheContinuousQueryRandomOperationsTest extends GridCommonAbstract
 
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
+        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
 
         cfg.setClientMode(client);
 
