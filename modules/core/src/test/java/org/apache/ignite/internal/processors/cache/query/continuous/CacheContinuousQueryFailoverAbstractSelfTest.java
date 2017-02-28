@@ -107,6 +107,7 @@ import org.apache.ignite.transactions.Transaction;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT;
 import static org.apache.ignite.cache.CacheAtomicWriteOrderMode.PRIMARY;
 import static org.apache.ignite.cache.CacheMemoryMode.ONHEAP_TIERED;
 import static org.apache.ignite.cache.CacheMode.REPLICATED;
@@ -131,6 +132,10 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
 
     /** */
     private int backups = 1;
+
+    static {
+        System.setProperty(IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT, "100");
+    }
 
     /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
@@ -258,15 +263,15 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
                 qryClnCache.put(key, -1);
 
             qryClnCache.put(keys.get(0), 100);
+
+            GridTestUtils.waitForCondition(new GridAbsPredicate() {
+                @Override public boolean apply() {
+                    return lsnr.evts.size() == 1;
+                }
+            }, 5000);
+
+            assertEquals(lsnr.evts.size(), 1);
         }
-
-        GridTestUtils.waitForCondition(new GridAbsPredicate() {
-            @Override public boolean apply() {
-                return lsnr.evts.size() == 1;
-            }
-        }, 5000);
-
-        assertEquals(lsnr.evts.size(), 1);
     }
 
     /**
@@ -1150,11 +1155,10 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
         boolean lostAllow, boolean wait) throws Exception {
         if (wait) {
             GridTestUtils.waitForCondition(new PA() {
-                @Override
-                public boolean apply() {
+                @Override public boolean apply() {
                     return expEvts.size() == lsnr.size();
                 }
-            }, 2000L);
+            }, 10_000L);
         }
 
         synchronized (lsnr) {
@@ -1970,9 +1974,9 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
 
                                     GridTestUtils.waitForCondition(new PA() {
                                         @Override public boolean apply() {
-                                            return lsnr.size() <= size;
+                                            return lsnr.size() >= size;
                                         }
-                                    }, 2000L);
+                                    }, 10_000L);
 
                                     List<T3<Object, Object, Object>> expEvts0 = new ArrayList<>();
 
@@ -2300,15 +2304,15 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
 
                 log.info("Batch loaded. Iteration: " + iteration);
 
-                final long cnt = lsnr.count();
-
                 final long expCnt = putCnt * stableNodeCnt + ignoredDupEvts;
 
                 GridTestUtils.waitForCondition(new GridAbsPredicate() {
                     @Override public boolean apply() {
-                        return cnt == expCnt;
+                        return lsnr.count() == expCnt;
                     }
                 }, 6_000);
+
+                final long cnt = lsnr.count();
 
                 if (cnt != expCnt) {
                     StringBuilder sb = new StringBuilder();
