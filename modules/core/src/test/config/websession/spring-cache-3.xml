@@ -96,5 +96,11 @@
                 </property>
             </bean>
         </property>
+
+        <property name="communicationSpi">
+            <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
+                <property name="idleConnectionTimeout" value="500"/>
+            </bean>
+        </property>
     </bean>
 </beans>
