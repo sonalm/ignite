@@ -27,6 +27,7 @@ import javax.cache.expiry.ExpiryPolicy;
 import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
+import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheEntryPredicate;
 import org.apache.ignite.internal.processors.cache.CachePartialUpdateCheckedException;
@@ -389,20 +390,54 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             return mapping != null && mapping.isEmpty() && hasRes;
         }
 
+        void initAffinityMapping(GridCacheContext cctx, UUID skipNodeId) {
+            assert req.size() == 1 : req;
+
+            List<ClusterNode> nodes =
+                cctx.affinity().nodesByPartition(req.key(0).partition(), req.topologyVersion());
+
+            if (nodes.size() == 1)
+                mapping = Collections.emptySet();
+            else {
+                for (int i = 1; i < nodes.size(); i++) {
+                    ClusterNode dhtNode = nodes.get(i);
+
+                    if (dhtNode.id().equals(skipNodeId) || (rcvd != null && rcvd.contains(dhtNode.id())))
+                        continue;
+
+                    if (cctx.discovery().node(dhtNode.id()) != null) {
+                        if (mapping == null)
+                            mapping = U.newHashSet(nodes.size() - 1);
+
+                        mapping.add(dhtNode.id());
+                    }
+                }
+
+                if (mapping == null)
+                    mapping = Collections.emptySet();
+            }
+        }
+
         /**
          * @param cctx Context.
          * @param nodeIds DHT nodes.
+         * @param skipNodeId Node ID to skip.
          */
-        void initMapping(GridCacheContext cctx, List<UUID> nodeIds) {
-            mapping = U.newHashSet(nodeIds.size());
-
+        void initMapping(GridCacheContext cctx, List<UUID> nodeIds, @Nullable UUID skipNodeId) {
             for (UUID dhtNodeId : nodeIds) {
-                if (cctx.discovery().node(dhtNodeId) != null)
+                if (dhtNodeId.equals(skipNodeId) || (rcvd != null && rcvd.contains(dhtNodeId)))
+                    continue;
+
+                if (cctx.discovery().node(dhtNodeId) != null) {
+                    if (mapping == null)
+                        mapping = U.newHashSet(nodeIds.size());
+
                     mapping.add(dhtNodeId);
+                }
             }
 
-            if (rcvd != null)
-                mapping.removeAll(rcvd);
+            if (mapping == null)
+                mapping = Collections.emptySet();
         }
 
         /**
@@ -425,17 +460,15 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onMappingReceived(GridCacheContext cctx, GridNearAtomicMappingResponse res) {
-            if (finished())
+            if (finished() || mapping != null)
                 return false;
 
-            if (mapping == null) {
-                initMapping(cctx, res.mapping());
+            if (res.affinityMapping())
+                initAffinityMapping(cctx, null);
+            else
+                initMapping(cctx, res.mapping(), null);
 
-                if (mapping.isEmpty() && hasRes)
-                    return true;
-            }
-
-            return false;
+            return finished();
         }
 
         /**
@@ -446,10 +479,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             if (finished())
                 return false;
 
-            if (mapping != null && mapping.remove(nodeId)) {
-                if (mapping.isEmpty() && hasRes)
-                    return true;
-            }
+            if (mapping != null && mapping.remove(nodeId))
+                return finished();
 
             return false;
         }
@@ -473,10 +504,22 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 nodeId = res.failedNodeId();
             }
 
-            if (res.mapping() != null) {
+            if (res.hasResult())
+                hasRes = true;
+
+            if (res.affinityMapping()) {
+                if (mapping == null) {
+                    initAffinityMapping(cctx, nodeId);
+
+                    return finished();
+                }
+            } else if (res.mapping() != null) {
                 // Mapping is sent from dht nodes.
-                if (mapping == null)
-                    initMapping(cctx, res.mapping());
+                if (mapping == null) {
+                    initMapping(cctx, res.mapping(), nodeId);
+
+                    return finished();
+                }
             }
             else {
                 // Mapping and result are sent from primary.
@@ -490,12 +533,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 }
             }
 
-            mapping.remove(nodeId);
-
-            if (res.hasResult())
-                hasRes = true;
-
-            return mapping.isEmpty() && hasRes;
+            return mapping.remove(nodeId) && finished();
         }
 
         /**
@@ -517,12 +555,14 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             assert res.returnValue() != null : res;
 
-            if (res.mapping() != null)
-                initMapping(cctx, res.mapping());
+            if (res.mapping() != null) {
+                if (mapping == null)
+                    initMapping(cctx, res.mapping(), null);
+            }
             else
-                mapping = Collections.emptySet();
+                initAffinityMapping(cctx, null);
 
-            return mapping.isEmpty();
+            return finished();
         }
 
         /** {@inheritDoc} */

@@ -61,6 +61,9 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** */
     static final int DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE = 0x20;
 
+    /** */
+    static final int DHT_ATOMIC_AFF_MAPPING_FLAG_MASK = 0x40;
+
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
@@ -148,6 +151,13 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
             setFlag(true, DHT_ATOMIC_SKIP_STORE_FLAG_MASK);
         if (keepBinary)
             setFlag(true, DHT_ATOMIC_KEEP_BINARY_FLAG_MASK);
+    }
+
+    /**
+     * @param affMapping
+     */
+    public void affinityMapping(boolean affMapping) {
+        setFlag(affMapping, DHT_ATOMIC_AFF_MAPPING_FLAG_MASK);
     }
 
     /**

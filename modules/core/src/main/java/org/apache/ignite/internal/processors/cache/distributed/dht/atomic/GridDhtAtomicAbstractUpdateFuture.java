@@ -31,6 +31,7 @@ import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.internal.IgniteInternalFuture;
 import org.apache.ignite.internal.cluster.ClusterTopologyCheckedException;
+import org.apache.ignite.internal.processors.affinity.AffinityAssignment;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.GridCacheAtomicFuture;
@@ -95,6 +96,9 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /** */
     private boolean repliedToNear;
 
+    /** */
+    private boolean affMapping = true;
+
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
@@ -154,6 +158,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      */
     @SuppressWarnings("ForLoopReplaceableByForEach")
     final void addWriteEntry(
+        AffinityAssignment affAssignment,
         UUID nearNodeId,
         GridDhtCacheEntry entry,
         @Nullable CacheObject val,
@@ -166,7 +171,14 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         long updateCntr) {
         AffinityTopologyVersion topVer = updateReq.topologyVersion();
 
-        List<ClusterNode> dhtNodes = cctx.dht().topology().nodes(entry.partition(), topVer);
+        List<ClusterNode> affNodes = affAssignment.get(entry.partition());
+
+        List<ClusterNode> dhtNodes = cctx.dht().topology().nodes(entry.partition(), affAssignment, affNodes);
+
+        if (dhtNodes != null)
+            affMapping = false;
+        else
+            dhtNodes = affNodes;
 
         if (log.isDebugEnabled())
             log.debug("Mapping entry to DHT nodes [nodes=" + U.nodeIds(dhtNodes) + ", entry=" + entry + ']');
@@ -240,6 +252,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         EntryProcessor<Object, Object, Object> entryProcessor,
         long ttl,
         long expireTime) {
+        affMapping = false;
+
         CacheWriteSynchronizationMode syncMode = updateReq.writeSynchronizationMode();
 
         addNearKey(entry.key(), readers);
@@ -415,21 +429,28 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         List<UUID> dhtNodes = null;
 
+        boolean affMapping = false;
+
         if (fullSync) {
             if (!F.isEmpty(mappings)) {
-                dhtNodes = new ArrayList<>(mappings.size());
+                if (updateReq.size() == 1 && this.affMapping)
+                    affMapping = true;
+                else {
+                    dhtNodes = new ArrayList<>(mappings.size());
 
-                dhtNodes.addAll(mappings.keySet());
+                    dhtNodes.addAll(mappings.keySet());
+                }
             }
             else
                 dhtNodes = Collections.emptyList();
-
-            if (needReplyToNear)
-                updateRes.mapping(dhtNodes);
         }
+        else
+            dhtNodes = Collections.emptyList();
+
+        updateRes.mapping(dhtNodes);
 
         if (!F.isEmpty(mappings)) {
-            sendDhtRequests(fullSync && !needReplyToNear, dhtNodes, ret);
+            sendDhtRequests(fullSync && !needReplyToNear, dhtNodes, affMapping, ret);
 
             if (needReplyToNear)
                 completionCb.apply(updateReq, updateRes);
@@ -439,7 +460,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                         cctx.cacheId(),
                         updateReq.partition(),
                         updateReq.futureId(),
-                        dhtNodes);
+                        dhtNodes,
+                        affMapping);
 
                     try {
                         cctx.io().send(updateRes.nodeId(), mappingRes, cctx.ioPolicy());
@@ -464,11 +486,17 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      * @param dhtNodes DHT nodes.
      * @param ret Return value.
      */
-    private void sendDhtRequests(boolean nearReplyInfo, List<UUID> dhtNodes, GridCacheReturn ret) {
+    private void sendDhtRequests(boolean nearReplyInfo, List<UUID> dhtNodes, boolean affMapping, GridCacheReturn ret) {
         for (GridDhtAtomicAbstractUpdateRequest req : mappings.values()) {
             try {
                 if (nearReplyInfo) {
-                    req.dhtNodes(dhtNodes);
+                    if (affMapping) {
+                        assert dhtNodes == null;
+
+                        req.affinityMapping(true);
+                    }
+                    else
+                        req.dhtNodes(dhtNodes);
 
                     if (!ret.hasValue())
                         req.setResult(ret.success());

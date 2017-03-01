@@ -34,6 +34,7 @@ import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.Nullable;
 
+import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_AFF_MAPPING_FLAG_MASK;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_RESULT_SUCCESS_MASK;
@@ -102,6 +103,13 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         this.primaryId = primaryId;
         this.mapping = mapping;
         this.flags = flags;
+    }
+
+    /**
+     * @return {@code True} if update mapping matches affinity function result.
+     */
+    boolean affinityMapping() {
+        return isFlag(DHT_ATOMIC_AFF_MAPPING_FLAG_MASK);
     }
 
     /**
@@ -389,6 +397,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         return S.toString(GridDhtAtomicNearResponse.class, this, "flags",
             "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK) +
             "|resOk=" + isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK) +
+            "|affMap=" + isFlag(DHT_ATOMIC_AFF_MAPPING_FLAG_MASK) +
             "|dhtFail=" + isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE));
     }
 }

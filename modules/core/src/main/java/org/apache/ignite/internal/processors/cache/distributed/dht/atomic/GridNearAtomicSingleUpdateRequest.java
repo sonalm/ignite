@@ -164,6 +164,8 @@ public class GridNearAtomicSingleUpdateRequest extends GridNearAtomicAbstractSin
 
     /** {@inheritDoc} */
     @Override public int size() {
+        assert key != null;
+
         return key == null ? 0 : 1;
     }
 

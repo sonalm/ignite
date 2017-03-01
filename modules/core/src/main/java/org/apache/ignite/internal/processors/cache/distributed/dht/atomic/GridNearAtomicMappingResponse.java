@@ -38,6 +38,9 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
     public static final int CACHE_MSG_IDX = nextIndexId();
 
     /** */
+    private static final int AFF_MAPPING_FLAG_MASK = 0x01;
+
+    /** */
     private int part;
 
     /** */
@@ -46,6 +49,9 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
 
     /** */
     private long futId;
+
+    /** */
+    private byte flags;
 
     /**
      *
@@ -59,12 +65,45 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
      * @param part Partition.
      * @param futId Future ID.
      * @param mapping Mapping.
+     * @param affMapping {@code True} if update mapping matches affinity function result.
      */
-    GridNearAtomicMappingResponse(int cacheId, int part, long futId, List<UUID> mapping) {
+    GridNearAtomicMappingResponse(int cacheId, int part, long futId, List<UUID> mapping, boolean affMapping) {
+        assert mapping == null || !affMapping;
+
         this.cacheId = cacheId;
         this.part = part;
         this.futId = futId;
         this.mapping = mapping;
+
+        if (affMapping)
+            setFlag(true, AFF_MAPPING_FLAG_MASK);
+    }
+
+    /**
+     * @return {@code True} if update mapping matches affinity function result.
+     */
+    boolean affinityMapping() {
+        return isFlag(AFF_MAPPING_FLAG_MASK);
+    }
+
+    /**
+     * Sets flag mask.
+     *
+     * @param flag Set or clear.
+     * @param mask Mask.
+     */
+    protected final void setFlag(boolean flag, int mask) {
+        flags = flag ? (byte)(flags | mask) : (byte)(flags & ~mask);
+    }
+
+    /**
+     * Reags flag mask.
+     *
+     * @param mask Mask to read.
+     * @return Flag value.
+     */
+    final boolean isFlag(int mask) {
+        return (flags & mask) != 0;
     }
 
     /** {@inheritDoc} */
@@ -98,7 +137,7 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 6;
+        return 7;
     }
 
     /** {@inheritDoc} */
@@ -122,18 +161,24 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeLong("futId", futId))
+                if (!writer.writeByte("flags", flags))
                     return false;
 
                 writer.incrementState();
 
             case 4:
-                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
+                if (!writer.writeLong("futId", futId))
                     return false;
 
                 writer.incrementState();
 
             case 5:
+                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
+                    return false;
+
+                writer.incrementState();
+
+            case 6:
                 if (!writer.writeInt("part", part))
                     return false;
 
@@ -156,7 +201,7 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
 
         switch (reader.state()) {
             case 3:
-                futId = reader.readLong("futId");
+                flags = reader.readByte("flags");
 
                 if (!reader.isLastRead())
                     return false;
@@ -164,7 +209,7 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 4:
-                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
+                futId = reader.readLong("futId");
 
                 if (!reader.isLastRead())
                     return false;
@@ -172,6 +217,14 @@ public class GridNearAtomicMappingResponse extends GridCacheMessage {
                 reader.incrementState();
 
             case 5:
+                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
+
+                if (!reader.isLastRead())
+                    return false;
+
+                reader.incrementState();
+
+            case 6:
                 part = reader.readInt("part");
 
                 if (!reader.isLastRead())

@@ -405,6 +405,8 @@ public class GridNearAtomicFullUpdateRequest extends GridNearAtomicAbstractUpdat
 
     /** {@inheritDoc} */
     @Override public int size() {
+        assert keys != null;
+
         return keys != null ? keys.size() : 0;
     }
 
