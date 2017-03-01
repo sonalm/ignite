@@ -485,7 +485,7 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
                 if (rnd.nextBoolean())
                     cache = qryClient.cache(null);
                 else {
-                    for (int j = 0; j < 10; j++) {
+                    for (int j = 0; j < 1000; j++) {
                         int nodeIdx = rnd.nextInt(SRV_NODES);
 
                         if (killedNode != nodeIdx) {
