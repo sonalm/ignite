@@ -1369,6 +1369,7 @@ public abstract class GridAbstractTest extends TestCase {
 
         commSpi.setLocalPort(GridTestUtils.getNextCommPort(getClass()));
         commSpi.setTcpNoDelay(true);
+        commSpi.setIdleConnectionTimeout(500);
 
         cfg.setCommunicationSpi(commSpi);
 
