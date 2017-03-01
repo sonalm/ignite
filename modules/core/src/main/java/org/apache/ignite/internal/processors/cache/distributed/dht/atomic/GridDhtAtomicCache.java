@@ -3490,18 +3490,23 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     private void sendDhtNearResponse(final UUID primaryId,
         final GridDhtAtomicAbstractUpdateRequest req,
         GridDhtAtomicNearResponse nearRes) {
+        DeferredResponseClosure c = primaryId != null ?
+            new DeferredResponseClosure(req.partition(), primaryId, req.futureId()) : null;
+
         try {
             ClusterNode node = ctx.discovery().node(req.nearNodeId());
 
             if (node == null)
                 throw new ClusterTopologyCheckedException("Node left: " + req.nearNodeId());
 
-            if (primaryId != null) {
+            if (c != null) {
                 ctx.gridIO().send(node,
                     TOPIC_CACHE,
                     nearRes,
                     ctx.ioPolicy(),
-                    new DeferredResponseClosure(req.partition(), primaryId, req.futureId()));
+                    c);
+
+                c = null;
             }
             else
                 ctx.gridIO().send(node, TOPIC_CACHE, nearRes, ctx.ioPolicy());
@@ -3514,15 +3519,21 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             }
         }
         catch (ClusterTopologyCheckedException ignored) {
-            U.warn(msgLog, "Failed to send DHT near response, node left [futId=" + req.futureId() +
-                ", nearFutId=" + req.nearFutureId() +
-                ", node=" + req.nearNodeId() + ']');
+            if (msgLog.isDebugEnabled()) {
+                msgLog.debug("Failed to send DHT near response, node left [futId=" + req.futureId() +
+                    ", nearFutId=" + req.nearFutureId() +
+                    ", node=" + req.nearNodeId() + ']');
+            }
         }
         catch (IgniteCheckedException e) {
             U.error(msgLog, "Failed to send DHT near response [futId=" + req.futureId() +
                 ", nearFutId=" + req.nearFutureId() +
                 ", node=" + req.nearNodeId() +
                 ", res=" + nearRes + ']', e);
+        }
+        finally {
+            if (c != null)
+                c.apply(null);
         }
     }
 

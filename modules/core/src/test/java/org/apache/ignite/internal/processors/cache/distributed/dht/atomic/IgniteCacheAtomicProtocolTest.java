@@ -28,6 +28,7 @@ import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
+import org.apache.ignite.internal.IgniteKernal;
 import org.apache.ignite.internal.TestRecordingCommunicationSpi;
 import org.apache.ignite.internal.util.lang.GridAbsPredicate;
 import org.apache.ignite.internal.util.typedef.F;
@@ -326,6 +327,90 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         }, 5000);
 
         checkData(F.asMap(key, key));
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutNearNodeFailure() throws Exception {
+        startGrids(2);
+
+        client = true;
+
+        Ignite clientNode = startGrid(2);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
+
+        awaitPartitionMapExchange();
+
+        final Ignite srv0 = grid(0);
+        final Ignite srv1 = grid(1);
+
+        final Integer key = primaryKey(srv0.cache(TEST_CACHE));
+
+        nearAsyncCache.put(key, key);
+
+        testSpi(srv1).blockMessages(GridDhtAtomicNearResponse.class, clientNode.name());
+
+        stopGrid(2);
+
+        GridTestUtils.waitForCondition(new GridAbsPredicate() {
+            @Override public boolean apply() {
+                return ((IgniteKernal)srv0).context().cache().context().mvcc().atomicFuturesCount() == 0;
+            }
+        }, 5000);
+
+        assertEquals(0, ((IgniteKernal)srv0).context().cache().context().mvcc().atomicFuturesCount());
+        assertEquals(0, ((IgniteKernal)srv1).context().cache().context().mvcc().atomicFuturesCount());
+
+        checkData(F.asMap(key, key));
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutAllNearNodeFailure() throws Exception {
+        final int SRVS = 4;
+
+        startGrids(SRVS);
+
+        client = true;
+
+        Ignite clientNode = startGrid(SRVS);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
+
+        awaitPartitionMapExchange();
+
+        for (int i = 0; i < SRVS; i++)
+            testSpi(grid(i)).blockMessages(GridDhtAtomicNearResponse.class, clientNode.name());
+
+        Map<Integer, Integer> map = new HashMap<>();
+
+        for (int i = 0; i < 100; i++)
+            map.put(i, i);
+
+        nearAsyncCache.putAll(map);
+
+        stopGrid(SRVS);
+
+        GridTestUtils.waitForCondition(new GridAbsPredicate() {
+            @Override public boolean apply() {
+                for (int i = 0; i < SRVS; i++) {
+                    if (grid(i).context().cache().context().mvcc().atomicFuturesCount() != 0)
+                        return false;
+                }
+
+                return true;
+            }
+        }, 5000);
+
+        for (int i = 0; i < SRVS; i++)
+            assertEquals(0, grid(i).context().cache().context().mvcc().atomicFuturesCount());
+
+        checkData(map);
     }
 
     /**

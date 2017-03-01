@@ -26,6 +26,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.timeout.GridTimeoutObject;
 import org.apache.ignite.internal.util.GridLongList;
+import org.apache.ignite.internal.util.tostring.GridToStringExclude;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
@@ -46,6 +47,7 @@ public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implem
 
     /** */
     @GridDirectTransient
+    @GridToStringExclude
     private GridTimeoutObject timeoutSnd;
 
     /**
@@ -64,7 +66,6 @@ public class GridDhtAtomicDeferredUpdateResponse extends GridCacheMessage implem
     public GridDhtAtomicDeferredUpdateResponse(int cacheId, GridLongList futIds) {
         this.cacheId = cacheId;
         this.futIds = futIds;
-        this.timeoutSnd = timeoutSnd;
     }
 
     /**
