@@ -3561,9 +3561,11 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             updateFut.onDhtResponse(nodeId, res);
         }
         else {
-            U.warn(msgLog, "Failed to find update future for DHT atomic near response [futId=" + res.futureId() +
-                ", node=" + nodeId +
-                ", res=" + res + ']');
+            if (msgLog.isDebugEnabled()) {
+                msgLog.debug("Failed to find future for DHT atomic near response [futId=" + res.futureId() +
+                    ", node=" + nodeId +
+                    ", res=" + res + ']');
+            }
         }
     }
 

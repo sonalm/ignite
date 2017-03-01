@@ -57,6 +57,7 @@ public abstract class CacheAsyncOperationsFailoverAbstractTest extends GridCache
         IgniteConfiguration cfg = super.getConfiguration(gridName);
 
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
+        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
 
         return cfg;
     }
