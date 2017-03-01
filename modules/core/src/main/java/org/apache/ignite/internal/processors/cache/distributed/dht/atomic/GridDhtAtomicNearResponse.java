@@ -94,6 +94,8 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         List<UUID> mapping,
         byte flags)
     {
+        assert primaryId != null;
+
         this.cacheId = cacheId;
         this.partId = partId;
         this.futId = futId;
@@ -102,10 +104,16 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         this.flags = flags;
     }
 
+    /**
+     * @return Errors.
+     */
     @Nullable UpdateErrors errors() {
         return errors;
     }
 
+    /**
+     * @param errors Errors.
+     */
     void errors(UpdateErrors errors) {
         this.errors = errors;
     }

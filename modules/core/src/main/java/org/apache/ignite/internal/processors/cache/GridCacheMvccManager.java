@@ -453,7 +453,7 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
     }
 
     /**
-     * @return Collection of pending atomic futures.
+     * @return Number of pending atomic futures.
      */
     public int atomicFuturesCount() {
         return atomicFuts.size();
@@ -498,6 +498,7 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
 
     /**
      * @param topVer Topology version.
+     * @return Future.
      */
     public GridFutureAdapter addDataStreamerFuture(AffinityTopologyVersion topVer) {
         final DataStreamerFuture fut = new DataStreamerFuture(topVer);

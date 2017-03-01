@@ -414,6 +414,7 @@ class GridNioSslHandler extends ReentrantLock {
      * Adds write request to the queue.
      *
      * @param buf Buffer to write.
+     * @param ackC Closure invoked when message ACK is received.
      * @return Write future.
      */
     GridNioFuture<?> deferredWrite(ByteBuffer buf, IgniteInClosure<IgniteException> ackC) {
@@ -477,6 +478,7 @@ class GridNioSslHandler extends ReentrantLock {
      * Copies data from out net buffer and passes it to the underlying chain.
      *
      * @return Write future.
+     * @param ackC Closure invoked when message ACK is received.
      * @throws GridNioException If send failed.
      */
     GridNioFuture<?> writeNetBuffer(IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
@@ -685,8 +687,11 @@ class GridNioSslHandler extends ReentrantLock {
          *
          * @param fut Future.
          * @param buf Buffer to write.
+         * @param ackC Closure invoked when message ACK is received.
          */
-        private WriteRequest(GridNioEmbeddedFuture<Object> fut, ByteBuffer buf, IgniteInClosure<IgniteException> ackC) {
+        private WriteRequest(GridNioEmbeddedFuture<Object> fut,
+            ByteBuffer buf,
+            IgniteInClosure<IgniteException> ackC) {
             this.fut = fut;
             this.buf = buf;
             this.ackC = ackC;

@@ -1349,8 +1349,6 @@ public class GridCachePartitionExchangeManager<K, V> extends GridCacheSharedMana
         if (!readyFuts.isEmpty()) {
             U.warn(log, "Pending affinity ready futures:");
 
-            int cnt = 0;
-
             for (AffinityReadyFuture fut : readyFuts.values())
                 U.warn(log, ">>> " + fut);
         }
@@ -1510,14 +1508,8 @@ public class GridCachePartitionExchangeManager<K, V> extends GridCacheSharedMana
 
             U.warn(log, "Pending atomic cache futures:");
 
-            int cnt = 0;
-
-            for (GridCacheFuture<?> fut : mvcc.atomicFutures()) {
+            for (GridCacheFuture<?> fut : mvcc.atomicFutures())
                 U.warn(log, ">>> " + fut);
-
-                if (cnt++ >= 10)
-                    break;
-            }
 
             U.warn(log, "Pending data streamer futures:");
 

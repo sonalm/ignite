@@ -480,9 +480,13 @@ public class GridNioServer<T> {
      * @param ses Session.
      * @param msg Message.
      * @param createFut {@code True} if future should be created.
+     * @param ackC Closure invoked when message ACK is received.
      * @return Future for operation.
      */
-    GridNioFuture<?> send(GridNioSession ses, ByteBuffer msg, boolean createFut, IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
+    GridNioFuture<?> send(GridNioSession ses,
+        ByteBuffer msg,
+        boolean createFut,
+        IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
         assert ses instanceof GridSelectorNioSessionImpl : ses;
 
         GridSelectorNioSessionImpl impl = (GridSelectorNioSessionImpl)ses;
@@ -507,9 +511,13 @@ public class GridNioServer<T> {
      * @param ses Session.
      * @param msg Message.
      * @param createFut {@code True} if future should be created.
+     * @param ackC Closure invoked when message ACK is received.
      * @return Future for operation.
      */
-    GridNioFuture<?> send(GridNioSession ses, Message msg, boolean createFut, IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
+    GridNioFuture<?> send(GridNioSession ses,
+        Message msg,
+        boolean createFut,
+        IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
         assert ses instanceof GridSelectorNioSessionImpl;
 
         GridSelectorNioSessionImpl impl = (GridSelectorNioSessionImpl)ses;
@@ -540,8 +548,6 @@ public class GridNioServer<T> {
     private void send0(GridSelectorNioSessionImpl ses, SessionWriteRequest req, boolean sys) throws IgniteCheckedException {
         assert ses != null;
         assert req != null;
-
-        IgniteInClosure<IgniteException> ackC;
 
         int msgCnt = sys ? ses.offerSystemFuture(req) : ses.offerFuture(req);
 
@@ -2662,8 +2668,12 @@ public class GridNioServer<T> {
          * @param ses Session.
          * @param msg Message.
          * @param skipRecovery Skip recovery flag.
+         * @param ackC Closure invoked when message ACK is received.
          */
-        WriteRequestImpl(GridNioSession ses, Object msg, boolean skipRecovery, IgniteInClosure<IgniteException> ackC) {
+        WriteRequestImpl(GridNioSession ses,
+            Object msg,
+            boolean skipRecovery,
+            IgniteInClosure<IgniteException> ackC) {
             this.ses = ses;
             this.msg = msg;
             this.skipRecovery = skipRecovery;
@@ -2818,8 +2828,12 @@ public class GridNioServer<T> {
          * @param ses Session to change.
          * @param op Requested operation.
          * @param msg Message.
+         * @param ackC Closure invoked when message ACK is received.
          */
-        NioOperationFuture(GridSelectorNioSessionImpl ses, NioOperation op, Object msg, IgniteInClosure<IgniteException> ackC) {
+        NioOperationFuture(GridSelectorNioSessionImpl ses,
+            NioOperation op,
+            Object msg,
+            IgniteInClosure<IgniteException> ackC) {
             super(ackC);
 
             assert ses != null;
@@ -2839,9 +2853,13 @@ public class GridNioServer<T> {
          * @param op Requested operation.
          * @param commMsg Direct message.
          * @param skipRecovery Skip recovery flag.
+         * @param ackC Closure invoked when message ACK is received.
          */
-        NioOperationFuture(GridSelectorNioSessionImpl ses, NioOperation op,
-            Message commMsg, boolean skipRecovery, IgniteInClosure<IgniteException> ackC) {
+        NioOperationFuture(GridSelectorNioSessionImpl ses,
+            NioOperation op,
+            Message commMsg,
+            boolean skipRecovery,
+            IgniteInClosure<IgniteException> ackC) {
             super(ackC);
 
             assert ses != null;
@@ -3009,7 +3027,10 @@ public class GridNioServer<T> {
         }
 
         /** {@inheritDoc} */
-        @Override public GridNioFuture<?> onSessionWrite(GridNioSession ses, Object msg, boolean fut, IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
+        @Override public GridNioFuture<?> onSessionWrite(GridNioSession ses,
+            Object msg,
+            boolean fut,
+            IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
             if (directMode) {
                 boolean sslSys = sslFilter != null && msg instanceof ByteBuffer;
 

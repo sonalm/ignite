@@ -110,8 +110,10 @@ public interface GridNioSession {
     /**
      * @param msg Message to be sent.
      * @param ackC Optional closure invoked when ack for message is received.
+     * @throws IgniteCheckedException If failed.
      */
-    public void sendNoFuture(Object msg, @Nullable IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException;
+    public void sendNoFuture(Object msg, @Nullable IgniteInClosure<IgniteException> ackC)
+        throws IgniteCheckedException;
 
     /**
      * Gets metadata associated with specified key.

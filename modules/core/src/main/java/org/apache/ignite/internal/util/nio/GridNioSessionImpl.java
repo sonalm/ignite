@@ -117,7 +117,8 @@ public class GridNioSessionImpl implements GridNioSession {
     }
 
     /** {@inheritDoc} */
-    @Override public void sendNoFuture(Object msg, IgniteInClosure<IgniteException> ackC) throws IgniteCheckedException {
+    @Override public void sendNoFuture(Object msg, IgniteInClosure<IgniteException> ackC)
+        throws IgniteCheckedException {
         try {
             chain().onSessionWrite(this, msg, false, ackC);
         }

@@ -85,7 +85,7 @@ public class GridNioFutureSelfTest extends GridCommonAbstractTest {
     }
 
     /**
-     * @throws Exception
+     * @throws Exception If failed.
      */
     public void testOnCancelled() throws Exception {
         GridTestUtils.assertThrows(log, new Callable<Object>() {

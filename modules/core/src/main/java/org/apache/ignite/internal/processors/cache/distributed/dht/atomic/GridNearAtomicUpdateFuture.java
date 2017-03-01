@@ -287,7 +287,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
     @Override public void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res) {
         GridCacheReturn opRes0;
         CachePartialUpdateCheckedException err0;
-        AffinityTopologyVersion remapTopVer0 = null;
+        AffinityTopologyVersion remapTopVer0;
 
         synchronized (mux) {
             if (futId == null || futId != res.futureId())
@@ -577,7 +577,10 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
         });
     }
 
-    private AffinityTopologyVersion onAllReceived() {
+    /**
+     * @return Non null topology version if update should be remapped.
+     */
+    @Nullable private AffinityTopologyVersion onAllReceived() {
         AffinityTopologyVersion remapTopVer0 = null;
 
         if (remapKeys != null) {
@@ -833,7 +836,6 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 Map<UUID, PrimaryRequestState> pendingMappings = mapUpdate(topNodes,
                     topVer,
                     futId,
-                    null,
                     remapKeys);
 
                 if (pendingMappings.size() == 1)
@@ -899,7 +901,6 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
      * @param topNodes Cache nodes.
      * @param topVer Topology version.
      * @param futId Future ID.
-     * @param updVer Update version.
      * @param remapKeys Keys to remap.
      * @return Mapping.
      * @throws Exception If failed.
@@ -908,7 +909,6 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
     private Map<UUID, PrimaryRequestState> mapUpdate(Collection<ClusterNode> topNodes,
         AffinityTopologyVersion topVer,
         Long futId,
-        @Nullable GridCacheVersion updVer,
         @Nullable Collection<KeyCacheObject> remapKeys) throws Exception {
         Iterator<?> it = null;
 
@@ -996,7 +996,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     nodeId,
                     futId,
                     false,
-                    updVer,
+                    null,
                     topVer,
                     topLocked,
                     syncMode,

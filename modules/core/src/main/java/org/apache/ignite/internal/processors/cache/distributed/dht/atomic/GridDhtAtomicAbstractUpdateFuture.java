@@ -310,6 +310,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /**
      * @param nodeId Node ID.
      * @param nodeErr Node error flag.
+     * @param errors Errors instance if DHT node failed to unmarshal message.
      * @return {@code True} if request found.
      */
     private boolean registerResponse(UUID nodeId, boolean nodeErr, UpdateErrors errors) {

@@ -108,7 +108,6 @@ import org.jetbrains.annotations.Nullable;
 
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_BUFFER_SIZE;
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT;
-import static org.apache.ignite.cache.CacheAtomicWriteOrderMode.CLOCK;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
 import static org.apache.ignite.internal.GridTopic.TOPIC_CACHE;
@@ -1813,7 +1812,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                         boolean sndPrevVal = !top.rebalanceFinished(req.topologyVersion());
 
-                        dhtFut = createDhtFuture(ver, req, false);
+                        dhtFut = createDhtFuture(ver, req);
 
                         expiry = expiryPolicy(req.expiry());
 
@@ -2467,7 +2466,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     dhtFut);
 
                 if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                    dhtFut = createDhtFuture(ver, req, true);
+                    dhtFut = createDhtFuture(ver, req);
 
                     readersOnly = true;
                 }
@@ -2772,7 +2771,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     batchRes.addDeleted(entry, updRes, entries);
 
                     if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                        dhtFut = createDhtFuture(ver, req, true);
+                        dhtFut = createDhtFuture(ver, req);
 
                         batchRes.readersOnly(true);
                     }
@@ -2874,19 +2873,14 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             KeyCacheObject key = req.key(0);
 
             while (true) {
-                try {
-                    GridDhtCacheEntry entry = entryExx(key, topVer);
+                GridDhtCacheEntry entry = entryExx(key, topVer);
 
-                    GridUnsafe.monitorEnter(entry);
+                GridUnsafe.monitorEnter(entry);
 
-                    if (entry.obsolete())
-                        GridUnsafe.monitorExit(entry);
-                    else
-                        return Collections.singletonList(entry);
-                }
-                catch (GridDhtInvalidPartitionException e) {
-                    throw e;
-                }
+                if (entry.obsolete())
+                    GridUnsafe.monitorExit(entry);
+                else
+                    return Collections.singletonList(entry);
             }
         }
         else {
@@ -2894,14 +2888,9 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
             while (true) {
                 for (int i = 0; i < req.size(); i++) {
-                    try {
-                        GridDhtCacheEntry entry = entryExx(req.key(i), topVer);
+                    GridDhtCacheEntry entry = entryExx(req.key(i), topVer);
 
-                        locked.add(entry);
-                    }
-                    catch (GridDhtInvalidPartitionException e) {
-                        throw e;
-                    }
+                    locked.add(entry);
                 }
 
                 boolean retry = false;
@@ -3083,43 +3072,16 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      *
      * @param writeVer Write version.
      * @param updateReq Update request.
-     * @param force If {@code true} then creates future without optimizations checks.
      * @return Backup update future or {@code null} if there are no backups.
      */
     @Nullable private GridDhtAtomicAbstractUpdateFuture createDhtFuture(
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        boolean force
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
         if (updateReq.size() == 1)
             return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq);
         else
             return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq);
-//        if (!force) {
-//            if (updateReq.fastMap())
-//                return null;
-//
-//            AffinityTopologyVersion topVer = updateReq.topologyVersion();
-//
-//            Collection<ClusterNode> nodes = ctx.kernalContext().discovery().cacheAffinityNodes(name(), topVer);
-//
-//            // We are on primary node for some key.
-//            assert !nodes.isEmpty() : "Failed to find affinity nodes [name=" + name() + ", topVer=" + topVer +
-//                ctx.kernalContext().discovery().discoCache(topVer) + ']';
-//
-//            if (nodes.size() == 1) {
-//                if (log.isDebugEnabled())
-//                    log.debug("Partitioned cache topology has only one node, will not create DHT atomic update future " +
-//                        "[topVer=" + topVer + ", updateReq=" + updateReq + ']');
-//
-//                return null;
-//            }
-//        }
-//
-//        if (updateReq.size() == 1)
-//            return new GridDhtAtomicSingleUpdateFuture(ctx, completionCb, writeVer, updateReq, updateRes);
-//        else
-//            return new GridDhtAtomicUpdateFuture(ctx, completionCb, writeVer, updateReq, updateRes);
     }
 
     /**

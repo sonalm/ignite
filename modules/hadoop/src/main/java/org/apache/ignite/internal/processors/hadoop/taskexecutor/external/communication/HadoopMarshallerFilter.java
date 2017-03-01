@@ -68,6 +68,7 @@ public class HadoopMarshallerFilter extends GridNioFilterAdapter {
         return proceedSessionWrite(ses, U.marshal(marsh, msg), fut, ackC);
     }
 
+    /** {@inheritDoc} */
     @Override public void onMessageReceived(GridNioSession ses, Object msg) throws IgniteCheckedException {
         assert msg instanceof byte[];
 

@@ -337,7 +337,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param topVer Topology version.
      * @return Future ID in case future added.
      */
-    protected final Long addAtomicFuture(AffinityTopologyVersion topVer) {
+    final Long addAtomicFuture(AffinityTopologyVersion topVer) {
+        // TODO IGNITE-4705: it seems no need to add future inside read lock.
+
         Long futId = cctx.mvcc().atomicFutureId();
 
         synchronized (mux) {
@@ -381,6 +383,13 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         }
 
         /**
+         * @return {@code True} if all expected responses are received.
+         */
+        private boolean finished() {
+            return mapping != null && mapping.isEmpty() && hasRes;
+        }
+
+        /**
          * @param cctx Context.
          * @param nodeIds DHT nodes.
          */
@@ -401,6 +410,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return Request if need process primary response, {@code null} otherwise.
          */
         @Nullable GridNearAtomicAbstractUpdateRequest processPrimaryResponse(UUID nodeId) {
+            if (finished())
+                return null;
+
             if (req != null && req.nodeId().equals(nodeId) && req.response() == null)
                 return req;
 
@@ -413,6 +425,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onMappingReceived(GridCacheContext cctx, GridNearAtomicMappingResponse res) {
+            if (finished())
+                return false;
+
             if (mapping == null) {
                 initMapping(cctx, res.mapping());
 
@@ -428,6 +443,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onNodeLeft(UUID nodeId) {
+            if (finished())
+                return false;
+
             if (mapping != null && mapping.remove(nodeId)) {
                 if (mapping.isEmpty() && hasRes)
                     return true;
@@ -445,6 +463,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onDhtResponse(GridCacheContext cctx, UUID nodeId, GridDhtAtomicNearResponse res) {
+            if (finished())
+                return false;
+
             if (res.primaryDhtFailureResponse()) {
                 assert res.mapping() != null : res;
                 assert res.failedNodeId() != null : res;
@@ -483,6 +504,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onPrimaryResponse(GridCacheContext cctx, GridNearAtomicUpdateResponse res) {
+            assert !finished() : this;
+
             hasRes = true;
 
             boolean onRes = req.onResponse(res);

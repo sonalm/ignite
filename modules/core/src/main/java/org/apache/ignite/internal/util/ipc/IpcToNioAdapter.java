@@ -203,7 +203,10 @@ public class IpcToNioAdapter<T> {
         }
 
         /** {@inheritDoc} */
-        @Override public GridNioFuture<?> onSessionWrite(GridNioSession ses, Object msg, boolean fut, IgniteInClosure<IgniteException> ackC) {
+        @Override public GridNioFuture<?> onSessionWrite(GridNioSession ses,
+            Object msg,
+            boolean fut,
+            IgniteInClosure<IgniteException> ackC) {
             assert ses == IpcToNioAdapter.this.ses;
 
             return send((Message)msg);

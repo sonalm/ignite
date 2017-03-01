@@ -108,6 +108,7 @@ public interface GridNioFilter {
      * @param ses Session instance.
      * @param msg Message to send.
      * @param fut {@code True} if write future should be created.
+     * @param ackC Closure invoked when message ACK is received.
      * @return Write future or {@code null}.
      * @throws IgniteCheckedException If filter is not in chain or GridNioException occurred in the underlying filter.
      */
@@ -158,6 +159,7 @@ public interface GridNioFilter {
      * @param ses Session on which message should be written.
      * @param msg Message being written.
      * @param fut {@code True} if write future should be created.
+     * @param ackC Closure invoked when message ACK is received.
      * @return Write future or {@code null}.
      * @throws GridNioException If GridNioException occurred while handling event.
      */

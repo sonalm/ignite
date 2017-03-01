@@ -236,7 +236,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param ttl TTL for near cache update.
      * @param expireTime Expire time for near cache update.
      */
-    public void addNearValue(int keyIdx,
+    void addNearValue(int keyIdx,
         @Nullable CacheObject val,
         long ttl,
         long expireTime) {

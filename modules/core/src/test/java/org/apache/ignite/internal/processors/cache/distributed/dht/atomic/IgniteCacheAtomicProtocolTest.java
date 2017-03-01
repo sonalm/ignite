@@ -291,8 +291,11 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         for (Ignite node : nodes) {
             IgniteCache<Integer, Integer> cache = node.cache(TEST_CACHE);
 
-            for (Map.Entry<Integer, Integer> e : expData.entrySet())
-                assertEquals(e.getValue(), cache.get(e.getKey()));
+            for (Map.Entry<Integer, Integer> e : expData.entrySet()) {
+                assertEquals("Invalid value [key=" + e.getKey() + ", node=" + node.name() + ']',
+                    e.getValue(),
+                    cache.get(e.getKey()));
+            }
         }
     }
 
