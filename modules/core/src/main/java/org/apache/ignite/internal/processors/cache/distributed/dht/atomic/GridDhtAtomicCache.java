@@ -3059,7 +3059,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         if (fut != null)
             fut.onPrimaryResponse(nodeId, res, false);
-
         else
             U.warn(msgLog, "Failed to find near update future for update response (will ignore) " +
                 "[futId=" + res.futureId() + ", node=" + nodeId + ", res=" + res + ']');
@@ -3397,7 +3396,15 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     private void sendDhtNearResponse(final GridDhtAtomicAbstractUpdateRequest req, GridDhtAtomicNearResponse nearRes) {
         try {
-            ctx.gridIO().send(req.nearNodeId(), TOPIC_CACHE, nearRes, ctx.ioPolicy());
+            ClusterNode node = ctx.discovery().node(req.nearNodeId());
+
+            if (node == null)
+                throw new ClusterTopologyCheckedException("Node failed: " + req.nearNodeId());
+
+            if (node.isLocal())
+                processDhtAtomicNearResponse(node.id(), nearRes);
+            else
+                ctx.io().send(node, nearRes, ctx.ioPolicy());
 
             if (msgLog.isDebugEnabled()) {
                 msgLog.debug("Sent DHT near response [futId=" + req.futureId() +
@@ -3452,8 +3459,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     @SuppressWarnings("unchecked")
     private void processDhtAtomicUpdateResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
-        assert !F.isEmpty(res.nearEvicted()) || res.error() != null : res;
-
         if (!F.isEmpty(res.nearEvicted())) {
             for (KeyCacheObject key : res.nearEvicted()) {
                 try {
@@ -3469,22 +3474,21 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             }
         }
 
-        if (res.errors() != null) {
-            GridDhtAtomicAbstractUpdateFuture updateFut =
+
+        GridDhtAtomicAbstractUpdateFuture updateFut =
                 (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
 
-            if (updateFut != null) {
-                if (msgLog.isDebugEnabled()) {
-                    msgLog.debug("Received DHT atomic update response [futId=" + res.futureId() +
+        if (updateFut != null) {
+            if (msgLog.isDebugEnabled()) {
+                msgLog.debug("Received DHT atomic update response [futId=" + res.futureId() +
                         ", writeVer=" + updateFut.writeVersion() + ", node=" + nodeId + ']');
-                }
+            }
 
-                updateFut.onDhtErrorResponse(nodeId, res.errors());
-            }
-            else {
-                U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +
+            updateFut.onDhtResponse(nodeId, res);
+        }
+        else {
+            U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +
                     ", node=" + nodeId + ", res=" + res + ']');
-            }
         }
     }
 
@@ -3509,7 +3513,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                         ", writeVer=" + res + ", node=" + nodeId + ']');
                 }
 
-                updateFut.onResult(nodeId);
+                updateFut.onDeferredResponse(nodeId);
             }
             else {
                 U.warn(msgLog, "Failed to find DHT update future for deferred update response [futId=" + id +

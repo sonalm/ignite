@@ -178,7 +178,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public byte fieldsCount() {
-        return 10;
+        return 8;
     }
 
     /** {@inheritDoc} */
@@ -223,25 +223,25 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 writer.incrementState();
 
-            case 5:
+            case 4:
                 if (!writer.writeByte("flags", flags))
                     return false;
 
                 writer.incrementState();
 
-            case 6:
+            case 5:
                 if (!writer.writeLong("futId", futId))
                     return false;
 
                 writer.incrementState();
 
-            case 8:
+            case 6:
                 if (!writer.writeInt("partId", partId))
                     return false;
 
                 writer.incrementState();
 
-            case 9:
+            case 7:
                 if (!writer.writeUuid("primaryId", primaryId))
                     return false;
 
@@ -271,7 +271,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 reader.incrementState();
 
-            case 5:
+            case 4:
                 flags = reader.readByte("flags");
 
                 if (!reader.isLastRead())
@@ -279,7 +279,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 reader.incrementState();
 
-            case 6:
+            case 5:
                 futId = reader.readLong("futId");
 
                 if (!reader.isLastRead())
@@ -287,7 +287,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 reader.incrementState();
 
-            case 8:
+            case 6:
                 partId = reader.readInt("partId");
 
                 if (!reader.isLastRead())
@@ -295,7 +295,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
                 reader.incrementState();
 
-            case 9:
+            case 7:
                 primaryId = reader.readUuid("primaryId");
 
                 if (!reader.isLastRead())

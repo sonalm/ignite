@@ -20,6 +20,7 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.cache.expiry.ExpiryPolicy;
@@ -43,6 +44,7 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtTopolo
 import org.apache.ignite.internal.processors.cache.distributed.near.GridNearAtomicCache;
 import org.apache.ignite.internal.util.future.GridFinishedFuture;
 import org.apache.ignite.internal.util.typedef.CI1;
+import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.X;
 import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.S;
@@ -229,7 +231,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             if (opRes == null && res.hasResult())
                 opRes = res.result();
 
-            if (reqState.onDhtResponse(cctx, nodeId, res)) {
+            if (reqState.onDhtResponse(nodeId, res)) {
                 opRes0 = opRes;
                 err0 = err;
                 remapTopVer0 = onAllReceived();
@@ -315,7 +317,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 assert reqState != null;
 
-                if (!reqState.onPrimaryResponse(cctx, res))
+                if (!reqState.onPrimaryResponse(res))
                     return;
             }
 
@@ -492,10 +494,10 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         Long futId = cctx.mvcc().atomicFutureId();
 
         Exception err = null;
-        GridNearAtomicAbstractUpdateRequest singleReq0 = null;
+        PrimaryRequestState reqState0 = null;
 
         try {
-            singleReq0 = mapSingleUpdate(topVer, futId);
+            reqState0 = mapSingleUpdate(topVer, futId);
 
             synchronized (mux) {
                 assert this.futId == null : this;
@@ -504,13 +506,18 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 this.topVer = topVer;
                 this.futId = futId;
 
-                reqState = new PrimaryRequestState(singleReq0);
+                reqState = reqState0;
             }
 
             if (storeFuture() && !cctx.mvcc().addAtomicFuture(futId, this)) {
                 assert isDone();
 
                 return;
+            }
+
+            if (reqState.req.dhtReplyToNear() && (cctx.discovery().topologyVersion() != topVer.topologyVersion())) {
+                if (!checkDhtNodes(futId))
+                    return;
             }
         }
         catch (Exception e) {
@@ -524,7 +531,36 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         }
 
         // Optimize mapping for single key.
-        mapSingle(singleReq0.nodeId(), singleReq0);
+        mapSingle(reqState0.req.nodeId(), reqState0.req);
+    }
+
+    /**
+     * @param futId
+     * @return
+     */
+    private boolean checkDhtNodes(Long futId) {
+        GridCacheReturn opRes0;
+        CachePartialUpdateCheckedException err0;
+        AffinityTopologyVersion remapTopVer0;
+
+        synchronized (mux) {
+            if (this.futId == null || !this.futId.equals(futId))
+                return false;
+
+            assert reqState != null;
+
+            if (reqState.checkDhtNodes(cctx)) {
+                opRes0 = opRes;
+                err0 = err;
+                remapTopVer0 = onAllReceived();
+            }
+            else
+                return true;
+        }
+
+        finishUpdateFuture(opRes0, err0, remapTopVer0);
+
+        return false;
     }
 
     /**
@@ -548,7 +584,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
      * @return Request.
      * @throws Exception If failed.
      */
-    private GridNearAtomicAbstractUpdateRequest mapSingleUpdate(AffinityTopologyVersion topVer, long futId)
+    private PrimaryRequestState mapSingleUpdate(AffinityTopologyVersion topVer, long futId)
         throws Exception {
         if (key == null)
             throw new NullPointerException("Null key.");
@@ -565,15 +601,18 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         else
             val = EntryProcessorResourceInjectorProxy.wrap(cctx.kernalContext(), (EntryProcessor)val);
 
-        ClusterNode primary = cctx.affinity().primaryByKey(cacheKey, topVer);
+        boolean stableTop = cctx.topology().rebalanceFinished(topVer) &&
+            !cctx.discovery().hasNearCache(cctx.cacheId(), topVer);
 
-        if (primary == null)
+        List<ClusterNode> nodes = cctx.affinity().nodesByKey(cacheKey, topVer);
+
+        if (F.isEmpty(nodes))
             throw new ClusterTopologyServerNotFoundException("Failed to map keys for cache (all partition nodes " +
                 "left the grid).");
 
-        GridNearAtomicAbstractUpdateRequest req;
+        ClusterNode primary = nodes.get(0);
 
-        boolean stableTop = true;
+        GridNearAtomicAbstractUpdateRequest req;
 
         if (canUseSingleRequest()) {
             if (op == TRANSFORM) {
@@ -660,7 +699,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             CU.EXPIRE_TIME_CALCULATE,
             null);
 
-        return req;
+        return new PrimaryRequestState(req, nodes, true);
     }
 
     /**

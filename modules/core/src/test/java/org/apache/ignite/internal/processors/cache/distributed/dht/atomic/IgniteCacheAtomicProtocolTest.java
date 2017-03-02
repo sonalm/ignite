@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
+import org.apache.ignite.cache.CacheEntryProcessor;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cluster.ClusterNode;
@@ -40,6 +41,8 @@ import org.apache.ignite.spi.discovery.tcp.ipfinder.TcpDiscoveryIpFinder;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
 import org.apache.ignite.testframework.GridTestUtils;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
+
+import javax.cache.processor.MutableEntry;
 
 import static org.apache.ignite.cache.CacheAtomicityMode.ATOMIC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
@@ -414,6 +417,83 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     }
 
     /**
+     * @throws Exception If failed.
+     */
+    public void testReplace() throws Exception {
+        final int SRVS = 2;
+
+        startGrids(SRVS);
+
+        client = true;
+
+        Ignite clientNode = startGrid(SRVS);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+
+        awaitPartitionMapExchange();
+
+        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
+
+        nearCache.replace(key, 1);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testRemove() throws Exception {
+        final int SRVS = 2;
+
+        startGrids(SRVS);
+
+        client = true;
+
+        Ignite clientNode = startGrid(SRVS);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+
+        awaitPartitionMapExchange();
+
+        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
+
+        nearCache.remove(key);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testRemoveAll() throws Exception {
+        // TODO IGNITE-4705 (some keys exist, some not).
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testInvoke() throws Exception {
+        final int SRVS = 2;
+
+        startGrids(SRVS);
+
+        client = true;
+
+        Ignite clientNode = startGrid(SRVS);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+
+        awaitPartitionMapExchange();
+
+        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
+
+        nearCache.invoke(key, new SetValueEntryProcessor(null));
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testInvokeAll() throws Exception {
+        // TODO IGNITE-4705 (some keys updated, some not).
+    }
+
+    /**
      * @param expData Expected cache data.
      */
     private void checkData(Map<Integer, Integer> expData) {
@@ -473,5 +553,28 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         ccfg.setBackups(backups);
 
         return ccfg;
+    }
+
+    /**
+     *
+     */
+    public static class SetValueEntryProcessor implements CacheEntryProcessor<Integer, Integer, Object> {
+        /** */
+        private Integer val;
+
+        /**
+         * @param val Value.
+         */
+        public SetValueEntryProcessor(Integer val) {
+            this.val = val;
+        }
+
+        /** {@inheritDoc} */
+        @Override public Object process(MutableEntry<Integer, Integer> entry, Object... args) {
+            if (val != null)
+                entry.setValue(val);
+
+            return null;
+        }
     }
 }

@@ -53,7 +53,6 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDh
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicAbstractSingleUpdateRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicAbstractUpdateRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicFullUpdateRequest;
-import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicMappingResponse;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicSingleUpdateFilterRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicSingleUpdateInvokeRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridNearAtomicSingleUpdateRequest;
@@ -196,7 +195,6 @@ public class MessageCodeGenerator {
 //        gen.generateAndWrite(GridNearAtomicSingleUpdateInvokeRequest.class);
 //        gen.generateAndWrite(GridNearAtomicSingleUpdateRequest.class);
 //        gen.generateAndWrite(GridNearAtomicUpdateResponse.class);
-//        gen.generateAndWrite(GridNearAtomicMappingResponse.class);
         //gen.generateAndWrite(GridNearAtomicAbstractUpdateRequest.class);
 
 //        gen.generateAndWrite(GridMessageCollection.class);

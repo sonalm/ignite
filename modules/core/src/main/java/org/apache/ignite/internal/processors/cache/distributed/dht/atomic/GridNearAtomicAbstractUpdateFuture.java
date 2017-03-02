@@ -19,6 +19,7 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -325,11 +326,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         final GridNearAtomicAbstractUpdateRequest req;
 
         /** */
-        private Set<UUID> rcvd;
-
-        /** */
         @GridToStringInclude
-        private Set<UUID> mapping;
+        private Set<UUID> dhtNodes;
 
         /** */
         private boolean hasRes;
@@ -337,67 +335,66 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         /**
          * @param req Request.
          */
-        PrimaryRequestState(GridNearAtomicAbstractUpdateRequest req) {
+        PrimaryRequestState(GridNearAtomicAbstractUpdateRequest req, List<ClusterNode> nodes, boolean single) {
             assert req != null && req.nodeId() != null : req;
 
             this.req = req;
+
+            if (req.dhtReplyToNear()) {
+                if (single) {
+                    if (nodes.size() > 1) {
+                        dhtNodes = U.newHashSet(nodes.size() - 1);
+
+                        for (int i = 1; i < nodes.size(); i++)
+                            dhtNodes.add(nodes.get(i).id());
+                    }
+                    else
+                        dhtNodes = Collections.emptySet();
+                }
+                else {
+                    dhtNodes = new HashSet<>();
+
+                    for (int i = 1; i < nodes.size(); i++)
+                        dhtNodes.add(nodes.get(i).id());
+                }
+            }
+        }
+
+        void addMapping(List<ClusterNode> nodes) {
+            assert req.dhtReplyToNear();
+
+            for (int i = 1; i < nodes.size(); i++)
+                dhtNodes.add(nodes.get(i).id());
+        }
+
+        boolean checkDhtNodes(GridCacheContext cctx) {
+            if (finished())
+                return false;
+
+            boolean finished = false;
+
+            for (Iterator<UUID> it = dhtNodes.iterator(); it.hasNext();) {
+                UUID nodeId = it.next();
+
+                if (!cctx.discovery().alive(nodeId)) {
+                    it.remove();
+
+                    if (finished()) {
+                        finished = true;
+
+                        break;
+                    }
+                }
+            }
+
+            return finished;
         }
 
         /**
          * @return {@code True} if all expected responses are received.
          */
         private boolean finished() {
-            return mapping != null && mapping.isEmpty() && hasRes;
-        }
-
-        void initAffinityMapping(GridCacheContext cctx, UUID skipNodeId) {
-            assert req.size() == 1 : req;
-
-            List<ClusterNode> nodes =
-                cctx.affinity().nodesByPartition(req.key(0).partition(), req.topologyVersion());
-
-            if (nodes.size() == 1)
-                mapping = Collections.emptySet();
-            else {
-                for (int i = 1; i < nodes.size(); i++) {
-                    ClusterNode dhtNode = nodes.get(i);
-
-                    if (dhtNode.id().equals(skipNodeId) || (rcvd != null && rcvd.contains(dhtNode.id())))
-                        continue;
-
-                    if (cctx.discovery().node(dhtNode.id()) != null) {
-                        if (mapping == null)
-                            mapping = U.newHashSet(nodes.size() - 1);
-
-                        mapping.add(dhtNode.id());
-                    }
-                }
-
-                if (mapping == null)
-                    mapping = Collections.emptySet();
-            }
-        }
-
-        /**
-         * @param cctx Context.
-         * @param nodeIds DHT nodes.
-         * @param skipNodeId Node ID to skip.
-         */
-        void initMapping(GridCacheContext cctx, List<UUID> nodeIds, @Nullable UUID skipNodeId) {
-            for (UUID dhtNodeId : nodeIds) {
-                if (dhtNodeId.equals(skipNodeId) || (rcvd != null && rcvd.contains(dhtNodeId)))
-                    continue;
-
-                if (cctx.discovery().node(dhtNodeId) != null) {
-                    if (mapping == null)
-                        mapping = U.newHashSet(nodeIds.size());
-
-                    mapping.add(dhtNodeId);
-                }
-            }
-
-            if (mapping == null)
-                mapping = Collections.emptySet();
+            return req.dhtReplyToNear() ? (dhtNodes.isEmpty() && hasRes) : hasRes;
         }
 
         /**
@@ -419,72 +416,36 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onNodeLeft(UUID nodeId) {
-            if (finished())
+            if (!req.dhtReplyToNear() || finished())
                 return false;
 
-            if (mapping != null && mapping.remove(nodeId))
-                return finished();
-
-            return false;
+            return dhtNodes.remove(nodeId) && finished();
         }
 
         /**
          * TODO 4705: check response for errors.
          *
-         * @param cctx Context.
          * @param nodeId Node ID.
          * @param res Response.
          * @return {@code True} if request processing finished.
          */
-        boolean onDhtResponse(GridCacheContext cctx, UUID nodeId, GridDhtAtomicNearResponse res) {
+        boolean onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res) {
+            assert req.dhtReplyToNear();
+
             if (finished())
                 return false;
 
-//            if (res.primaryDhtFailureResponse()) {
-//                assert res.mapping() != null : res;
-//                assert res.failedNodeId() != null : res;
-//
-//                nodeId = res.failedNodeId();
-//            }
-//
-//            if (res.hasResult())
-//                hasRes = true;
-//
-//            if (res.affinityMapping()) {
-//                if (mapping == null) {
-//                    initAffinityMapping(cctx, nodeId);
-//
-//                    return finished();
-//                }
-//            } else if (res.mapping() != null) {
-//                // Mapping is sent from dht nodes.
-//                if (mapping == null) {
-//                    initMapping(cctx, res.mapping(), nodeId);
-//
-//                    return finished();
-//                }
-//            }
-//            else {
-//                // Mapping and result are sent from primary.
-//                if (mapping == null) {
-//                    if (rcvd == null)
-//                        rcvd = new HashSet<>();
-//
-//                    rcvd.add(nodeId);
-//
-//                    return false; // Need wait for response from primary.
-//                }
-//            }
+            if (res.hasResult())
+                hasRes = true;
 
-            return mapping.remove(nodeId) && finished();
+            return dhtNodes != null && dhtNodes.remove(nodeId) && finished();
         }
 
         /**
-         * @param cctx Context.
          * @param res Response.
          * @return {@code True} if request processing finished.
          */
-        boolean onPrimaryResponse(GridCacheContext cctx, GridNearAtomicUpdateResponse res) {
+        boolean onPrimaryResponse(GridNearAtomicUpdateResponse res) {
             assert !finished() : this;
 
             hasRes = true;
@@ -497,13 +458,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 return true;
 
             assert res.returnValue() != null : res;
-
-//            if (res.mapping() != null) {
-//                if (mapping == null)
-//                    initMapping(cctx, res.mapping(), null);
-//            }
-//            else
-//                initAffinityMapping(cctx, null);
 
             return finished();
         }

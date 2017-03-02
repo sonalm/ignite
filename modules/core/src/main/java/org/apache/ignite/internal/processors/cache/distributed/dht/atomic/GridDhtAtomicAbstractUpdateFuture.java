@@ -305,7 +305,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
     /** {@inheritDoc} */
     @Override public final boolean onNodeLeft(UUID nodeId) {
-        boolean res = registerResponse(nodeId, true, null);
+        boolean res = registerResponse(nodeId);
 
         if (res && msgLog.isDebugEnabled()) {
             msgLog.debug("DTH update fut, node left [futId=" + futId + ", writeVer=" + writeVer +
@@ -317,11 +317,9 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
     /**
      * @param nodeId Node ID.
-     * @param nodeErr Node error flag.
-     * @param errors Errors instance if DHT node failed to unmarshal message.
      * @return {@code True} if request found.
      */
-    private boolean registerResponse(UUID nodeId, boolean nodeErr, UpdateErrors errors) {
+    private boolean registerResponse(UUID nodeId) {
         int resCnt0;
 
         GridDhtAtomicAbstractUpdateRequest req = mappings != null ? mappings.get(nodeId) : null;
@@ -457,23 +455,25 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                         ", writeVer=" + writeVer + ", node=" + req.nodeId() + ']');
                 }
 
-                registerResponse(req.nodeId(), true, null);
+                registerResponse(req.nodeId());
             }
             catch (IgniteCheckedException ignored) {
                 U.error(msgLog, "Failed to send request [futId=" + futId +
                     ", writeVer=" + writeVer + ", node=" + req.nodeId() + ']');
 
-                registerResponse(req.nodeId(), true, null);
+                registerResponse(req.nodeId());
             }
         }
     }
 
     /**
      * @param nodeId Node ID.
-     * @param errors Response.
+     * @param res Response.
      */
-    public final void onDhtErrorResponse(UUID nodeId, UpdateErrors errors) {
-        registerResponse(nodeId, false, errors);
+    public final void onDhtResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
+        assert !updateReq.dhtReplyToNear();
+
+        registerResponse(nodeId);
     }
 
     /**
@@ -481,11 +481,11 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      *
      * @param nodeId Backup node ID.
      */
-    public final void onResult(UUID nodeId) {
+    public final void onDeferredResponse(UUID nodeId) {
         if (log.isDebugEnabled())
             log.debug("Received deferred DHT atomic update future result [nodeId=" + nodeId + ']');
 
-        registerResponse(nodeId, false, null);
+        registerResponse(nodeId);
     }
 
     /**
