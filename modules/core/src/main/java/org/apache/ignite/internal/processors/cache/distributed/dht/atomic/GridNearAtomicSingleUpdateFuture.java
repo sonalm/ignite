@@ -454,65 +454,55 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
     /** {@inheritDoc} */
     @Override protected void mapOnTopology() {
-        // TODO IGNITE-4705: primary should block topology change, so it seems read lock is not needed.
-        cache.topology().readLock();
-
         AffinityTopologyVersion topVer;
-        Long futId;
 
-        try {
-            if (cache.topology().stopping()) {
-                onDone(new IgniteCheckedException("Failed to perform cache operation (cache is stopped): " +
-                    cache.name()));
+        if (cache.topology().stopping()) {
+            onDone(new IgniteCheckedException("Failed to perform cache operation (cache is stopped): " +
+                cache.name()));
+
+            return;
+        }
+
+        GridDhtTopologyFuture fut = cache.topology().topologyVersionFuture();
+
+        if (fut.isDone()) {
+            Throwable err = fut.validateCache(cctx);
+
+            if (err != null) {
+                onDone(err);
 
                 return;
             }
 
-            GridDhtTopologyFuture fut = cache.topology().topologyVersionFuture();
-
-            if (fut.isDone()) {
-                Throwable err = fut.validateCache(cctx);
-
-                if (err != null) {
-                    onDone(err);
-
-                    return;
-                }
-
-                topVer = fut.topologyVersion();
-
-                futId = addAtomicFuture(topVer);
-            }
-            else {
-                if (waitTopFut) {
-                    assert !topLocked : this;
-
-                    fut.listen(new CI1<IgniteInternalFuture<AffinityTopologyVersion>>() {
-                        @Override public void apply(IgniteInternalFuture<AffinityTopologyVersion> t) {
-                            cctx.kernalContext().closure().runLocalSafe(new Runnable() {
-                                @Override public void run() {
-                                    mapOnTopology();
-                                }
-                            });
-                        }
-                    });
-                }
-                else
-                    onDone(new GridCacheTryPutFailedException());
-
-                return;
-            }
+            topVer = fut.topologyVersion();
         }
-        finally {
-            cache.topology().readUnlock();
+        else {
+            if (waitTopFut) {
+                assert !topLocked : this;
+
+                fut.listen(new CI1<IgniteInternalFuture<AffinityTopologyVersion>>() {
+                    @Override public void apply(IgniteInternalFuture<AffinityTopologyVersion> t) {
+                        cctx.kernalContext().closure().runLocalSafe(new Runnable() {
+                            @Override public void run() {
+                                mapOnTopology();
+                            }
+                        });
+                    }
+                });
+            }
+            else
+                onDone(new GridCacheTryPutFailedException());
+
+            return;
         }
 
-        if (futId != null)
-            map(topVer, futId);
+        map(topVer);
     }
 
     /** {@inheritDoc} */
-    @Override protected void map(AffinityTopologyVersion topVer, Long futId) {
+    @Override protected void map(AffinityTopologyVersion topVer) {
+        Long futId = cctx.mvcc().atomicFutureId();
+
         Exception err = null;
         GridNearAtomicAbstractUpdateRequest singleReq0 = null;
 
@@ -520,10 +510,19 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             singleReq0 = mapSingleUpdate(topVer, futId);
 
             synchronized (mux) {
-                assert this.futId.equals(futId) || (this.isDone() && this.error() != null);
-                assert this.topVer == topVer;
+                assert this.futId == null : this;
+                assert this.topVer == AffinityTopologyVersion.ZERO : this;
+
+                this.topVer = topVer;
+                this.futId = futId;
 
                 reqState = new PrimaryRequestState(singleReq0);
+            }
+
+            if (storeFuture() && !cctx.mvcc().addAtomicFuture(futId, this)) {
+                assert isDone();
+
+                return;
             }
         }
         catch (Exception e) {

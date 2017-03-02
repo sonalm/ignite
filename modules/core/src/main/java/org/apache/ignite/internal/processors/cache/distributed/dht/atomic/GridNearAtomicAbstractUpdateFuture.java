@@ -212,18 +212,14 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             // Cannot remap.
             remapCnt = 1;
 
-            Long futId = addAtomicFuture(topVer);
-
-            if (futId != null)
-                map(topVer, futId);
+            map(topVer);
         }
     }
 
     /**
      * @param topVer Topology version.
-     * @param futId Future ID.
      */
-    protected abstract void map(AffinityTopologyVersion topVer, Long futId);
+    protected abstract void map(AffinityTopologyVersion topVer);
 
     /**
      * Maps future on ready topology.
@@ -248,7 +244,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
     /**
      * @return {@code True} future is stored by {@link GridCacheMvccManager#addAtomicFuture}.
      */
-    protected boolean storeFuture() {
+    final boolean storeFuture() {
         return syncMode != FULL_ASYNC;
     }
 
@@ -258,7 +254,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param nodeId Node ID.
      * @param req Request.
      */
-    protected void mapSingle(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
+    final void mapSingle(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
         if (cctx.localNodeId().equals(nodeId)) {
             cache.updateAllAsyncInternal(nodeId, req,
                 new GridDhtAtomicCache.UpdateReplyClosure() {
@@ -318,43 +314,15 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param req Request.
      * @param e Error.
      */
-    protected final void onSendError(GridNearAtomicAbstractUpdateRequest req, IgniteCheckedException e) {
-        synchronized (mux) {
-            GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
-                req.nodeId(),
-                req.futureId(),
-                cctx.deploymentEnabled());
+    final void onSendError(GridNearAtomicAbstractUpdateRequest req, IgniteCheckedException e) {
+        GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
+            req.nodeId(),
+            req.futureId(),
+            cctx.deploymentEnabled());
 
-            res.addFailedKeys(req.keys(), e);
+        res.addFailedKeys(req.keys(), e);
 
-            onPrimaryResponse(req.nodeId(), res, true);
-        }
-    }
-
-    /**
-     * Adds future prevents topology change before operation complete.
-     * Should be invoked before topology lock released.
-     *
-     * @param topVer Topology version.
-     * @return Future ID in case future added.
-     */
-    final Long addAtomicFuture(AffinityTopologyVersion topVer) {
-        // TODO IGNITE-4705: it seems no need to add future inside read lock.
-
-        Long futId = cctx.mvcc().atomicFutureId();
-
-        synchronized (mux) {
-            assert this.futId == null : this;
-            assert this.topVer == AffinityTopologyVersion.ZERO : this;
-
-            this.topVer = topVer;
-            this.futId = futId;
-        }
-
-        if (storeFuture() && !cctx.mvcc().addAtomicFuture(futId, this))
-            return null;
-
-        return futId;
+        onPrimaryResponse(req.nodeId(), res, true);
     }
 
     /**
