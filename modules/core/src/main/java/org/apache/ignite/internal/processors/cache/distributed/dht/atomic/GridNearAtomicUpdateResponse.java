@@ -104,10 +104,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /** Near expire times. */
     private GridLongList nearExpireTimes;
 
-    /** */
-    @GridDirectCollection(UUID.class)
-    private List<UUID> mapping;
-
     /** Partition ID. */
     private int partId = -1;
 
@@ -129,20 +125,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
         this.nodeId = nodeId;
         this.futId = futId;
         this.addDepInfo = addDepInfo;
-    }
-
-    /**
-     * @return Update mapping.
-     */
-    public List<UUID> mapping() {
-        return mapping;
-    }
-
-    /**
-     * @param mapping Mapping.
-     */
-    public void mapping(List<UUID> mapping) {
-        this.mapping = mapping;
     }
 
     /** {@inheritDoc} */
@@ -499,12 +481,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
                 writer.incrementState();
 
-            case 6:
-                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
-                    return false;
-
-                writer.incrementState();
-
             case 7:
                 if (!writer.writeMessage("nearExpireTimes", nearExpireTimes))
                     return false;
@@ -593,14 +569,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
             case 5:
                 futId = reader.readLong("futId");
-
-                if (!reader.isLastRead())
-                    return false;
-
-                reader.incrementState();
-
-            case 6:
-                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
 
                 if (!reader.isLastRead())
                     return false;

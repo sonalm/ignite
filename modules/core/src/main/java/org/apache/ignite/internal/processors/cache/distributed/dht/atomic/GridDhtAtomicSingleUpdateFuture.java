@@ -47,9 +47,11 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     GridDhtAtomicSingleUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq
+        GridNearAtomicAbstractUpdateRequest updateReq,
+        GridNearAtomicUpdateResponse updateRes,
+        GridDhtAtomicCache.UpdateReplyClosure completionCb
     ) {
-        super(cctx, writeVer, updateReq);
+        super(cctx, writeVer, updateReq, updateRes, completionCb);
     }
 
     /** {@inheritDoc} */
@@ -67,7 +69,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     /** {@inheritDoc} */
     @Override protected GridDhtAtomicAbstractUpdateRequest createRequest(
         UUID nodeId,
-        UUID nearNodeId,
         long futId,
         GridCacheVersion writeVer,
         CacheWriteSynchronizationMode syncMode,
@@ -81,8 +82,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
                 cctx.cacheId(),
                 nodeId,
                 futId,
-                nearNodeId,
-                updateReq.futureId(),
                 writeVer,
                 syncMode,
                 topVer,
@@ -97,8 +96,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
                 cctx.cacheId(),
                 nodeId,
                 futId,
-                nearNodeId,
-                updateReq.futureId(),
                 writeVer,
                 syncMode,
                 topVer,
@@ -110,6 +107,11 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
                 updateReq.skipStore(),
                 false);
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override protected void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err) {
+
     }
 
     /**

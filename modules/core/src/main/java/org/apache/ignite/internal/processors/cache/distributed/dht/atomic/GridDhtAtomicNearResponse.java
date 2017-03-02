@@ -18,25 +18,19 @@
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.UUID;
 import org.apache.ignite.IgniteCheckedException;
-import org.apache.ignite.internal.GridDirectCollection;
 import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.util.tostring.GridToStringExclude;
-import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.S;
-import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_AFF_MAPPING_FLAG_MASK;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
-import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_RESULT_SUCCESS_MASK;
 
 /**
@@ -59,19 +53,11 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     private UUID primaryId;
 
     /** */
-    @GridDirectCollection(UUID.class)
-    @GridToStringInclude
-    private List<UUID> mapping;
-
-    /** */
     @GridToStringExclude
     private byte flags;
 
     /** */
-    private UpdateErrors errors;
-
-    /** */
-    private UUID failedNodeId;
+    private UpdateErrors errs;
 
     /**
      *
@@ -85,14 +71,12 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      * @param partId Partition.
      * @param futId Future ID.
      * @param primaryId Primary node ID.
-     * @param mapping Update mapping.
      * @param flags Flags.
      */
     public GridDhtAtomicNearResponse(int cacheId,
         int partId,
         long futId,
         UUID primaryId,
-        List<UUID> mapping,
         byte flags)
     {
         assert primaryId != null;
@@ -101,54 +85,21 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
         this.partId = partId;
         this.futId = futId;
         this.primaryId = primaryId;
-        this.mapping = mapping;
         this.flags = flags;
-    }
-
-    /**
-     * @return {@code True} if update mapping matches affinity function result.
-     */
-    boolean affinityMapping() {
-        return isFlag(DHT_ATOMIC_AFF_MAPPING_FLAG_MASK);
     }
 
     /**
      * @return Errors.
      */
     @Nullable UpdateErrors errors() {
-        return errors;
+        return errs;
     }
 
     /**
      * @param errors Errors.
      */
     void errors(UpdateErrors errors) {
-        this.errors = errors;
-    }
-
-    /**
-     * @return Failed node ID.
-     */
-    UUID failedNodeId() {
-        return failedNodeId;
-    }
-
-    /**
-     * @param failedNodeId Failed node ID (used when primary notifies near node).
-     */
-    void failedNodeId(UUID failedNodeId) {
-        assert failedNodeId != null;
-
-        this.failedNodeId = failedNodeId;
-
-        setFlag(true, DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
-    }
-
-    /**
-     * @return {@code True} if message is sent from primary when DHT node fails.
-     */
-    boolean primaryDhtFailureResponse() {
-        return isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE);
+        this.errs = errors;
     }
 
     /**
@@ -168,10 +119,10 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      * @param e Error.
      */
     public void addFailedKey(KeyCacheObject key, Throwable e) {
-        if (errors == null)
-            errors = new UpdateErrors();
+        if (errs == null)
+            errs = new UpdateErrors();
 
-        errors.addFailedKey(key, e);
+        errs.addFailedKey(key, e);
     }
 
     /**
@@ -188,13 +139,6 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      */
     boolean hasResult() {
         return isFlag(DHT_ATOMIC_HAS_RESULT_MASK);
-    }
-
-    /**
-     * @return Update mapping.
-     */
-    public List<UUID> mapping() {
-        return mapping;
     }
 
     /**
@@ -246,16 +190,16 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     @Override public void prepareMarshal(GridCacheSharedContext ctx) throws IgniteCheckedException {
         super.prepareMarshal(ctx);
 
-        if (errors != null)
-            errors.prepareMarshal(this, ctx.cacheContext(cacheId));
+        if (errs != null)
+            errs.prepareMarshal(this, ctx.cacheContext(cacheId));
     }
 
     /** {@inheritDoc} */
     @Override public void finishUnmarshal(GridCacheSharedContext ctx, ClassLoader ldr) throws IgniteCheckedException {
         super.finishUnmarshal(ctx, ldr);
 
-        if (errors != null)
-            errors.finishUnmarshal(this, ctx.cacheContext(cacheId), ldr);
+        if (errs != null)
+            errs.finishUnmarshal(this, ctx.cacheContext(cacheId), ldr);
     }
 
     /** {@inheritDoc} */
@@ -274,13 +218,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeMessage("errors", errors))
-                    return false;
-
-                writer.incrementState();
-
-            case 4:
-                if (!writer.writeUuid("failedNodeId", failedNodeId))
+                if (!writer.writeMessage("errs", errs))
                     return false;
 
                 writer.incrementState();
@@ -293,12 +231,6 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
             case 6:
                 if (!writer.writeLong("futId", futId))
-                    return false;
-
-                writer.incrementState();
-
-            case 7:
-                if (!writer.writeCollection("mapping", mapping, MessageCollectionItemType.UUID))
                     return false;
 
                 writer.incrementState();
@@ -332,15 +264,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
         switch (reader.state()) {
             case 3:
-                errors = reader.readMessage("errors");
-
-                if (!reader.isLastRead())
-                    return false;
-
-                reader.incrementState();
-
-            case 4:
-                failedNodeId = reader.readUuid("failedNodeId");
+                errs = reader.readMessage("errs");
 
                 if (!reader.isLastRead())
                     return false;
@@ -357,14 +281,6 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
             case 6:
                 futId = reader.readLong("futId");
-
-                if (!reader.isLastRead())
-                    return false;
-
-                reader.incrementState();
-
-            case 7:
-                mapping = reader.readCollection("mapping", MessageCollectionItemType.UUID);
 
                 if (!reader.isLastRead())
                     return false;
@@ -394,10 +310,9 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(GridDhtAtomicNearResponse.class, this, "flags",
+        return S.toString(GridDhtAtomicNearResponse.class, this,
+            "flags",
             "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK) +
-            "|resOk=" + isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK) +
-            "|affMap=" + isFlag(DHT_ATOMIC_AFF_MAPPING_FLAG_MASK) +
-            "|dhtFail=" + isFlag(DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE));
+            "|resOk=" + isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK));
     }
 }

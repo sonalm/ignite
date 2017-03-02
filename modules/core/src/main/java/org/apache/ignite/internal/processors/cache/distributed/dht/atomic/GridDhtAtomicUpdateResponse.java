@@ -53,7 +53,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     private long futId;
 
     /** */
-    private UpdateErrors errors;
+    private UpdateErrors errs;
 
     /** Evicted readers. */
     @GridToStringInclude
@@ -84,10 +84,21 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     }
 
     /**
+     * @param key Key.
+     * @param e Error.
+     */
+    public void addFailedKey(KeyCacheObject key, Throwable e) {
+        if (errs == null)
+            errs = new UpdateErrors();
+
+        errs.addFailedKey(key, e);
+    }
+
+    /**
      * @return Errors.
      */
     @Nullable UpdateErrors errors() {
-        return errors;
+        return errs;
     }
 
     /** {@inheritDoc} */
@@ -108,15 +119,15 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
      * @param err Error.
      */
     public void onError(IgniteCheckedException err){
-        if (errors == null)
-            errors = new UpdateErrors();
+        if (errs == null)
+            errs = new UpdateErrors();
 
-        errors.onError(err);
+        errs.onError(err);
     }
 
     /** {@inheritDoc} */
     @Override public IgniteCheckedException error() {
-        return errors != null ? errors.error() : null;
+        return errs != null ? errs.error() : null;
     }
 
     /**
@@ -158,8 +169,8 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         prepareMarshalCacheObjects(nearEvicted, cctx);
 
-        if (errors != null)
-            errors.prepareMarshal(this, cctx);
+        if (errs != null)
+            errs.prepareMarshal(this, cctx);
     }
 
     /** {@inheritDoc} */
@@ -170,8 +181,8 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         finishUnmarshalCacheObjects(nearEvicted, cctx, ldr);
 
-        if (errors != null)
-            errors.finishUnmarshal(this, cctx, ldr);
+        if (errs != null)
+            errs.finishUnmarshal(this, cctx, ldr);
     }
 
     /** {@inheritDoc} */
@@ -200,7 +211,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeMessage("errors", errors))
+                if (!writer.writeMessage("errors", errs))
                     return false;
 
                 writer.incrementState();
@@ -240,7 +251,7 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
 
         switch (reader.state()) {
             case 3:
-                errors = reader.readMessage("errors");
+                errs = reader.readMessage("errors");
 
                 if (!reader.isLastRead())
                     return false;

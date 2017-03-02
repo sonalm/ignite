@@ -59,8 +59,6 @@ public class GridNearAtomicSingleUpdateFilterRequest extends GridNearAtomicSingl
      * @param cacheId Cache ID.
      * @param nodeId Node ID.
      * @param futId Future ID.
-     * @param fastMap Fast map scheme flag.
-     * @param updateVer Update version set if fast map is performed.
      * @param topVer Topology version.
      * @param topLocked Topology locked flag.
      * @param syncMode Synchronization mode.
@@ -71,15 +69,12 @@ public class GridNearAtomicSingleUpdateFilterRequest extends GridNearAtomicSingl
      * @param taskNameHash Task name hash code.
      * @param skipStore Skip write-through to a persistent storage.
      * @param keepBinary Keep binary flag.
-     * @param clientReq Client node request flag.
      * @param addDepInfo Deployment info flag.
      */
     GridNearAtomicSingleUpdateFilterRequest(
         int cacheId,
         UUID nodeId,
         long futId,
-        boolean fastMap,
-        @Nullable GridCacheVersion updateVer,
         @NotNull AffinityTopologyVersion topVer,
         boolean topLocked,
         CacheWriteSynchronizationMode syncMode,
@@ -88,17 +83,15 @@ public class GridNearAtomicSingleUpdateFilterRequest extends GridNearAtomicSingl
         @Nullable CacheEntryPredicate[] filter,
         @Nullable UUID subjId,
         int taskNameHash,
+        boolean stableTop,
         boolean skipStore,
         boolean keepBinary,
-        boolean clientReq,
         boolean addDepInfo
     ) {
         super(
             cacheId,
             nodeId,
             futId,
-            fastMap,
-            updateVer,
             topVer,
             topLocked,
             syncMode,
@@ -106,9 +99,9 @@ public class GridNearAtomicSingleUpdateFilterRequest extends GridNearAtomicSingl
             retval,
             subjId,
             taskNameHash,
+            stableTop,
             skipStore,
             keepBinary,
-            clientReq,
             addDepInfo
         );
 

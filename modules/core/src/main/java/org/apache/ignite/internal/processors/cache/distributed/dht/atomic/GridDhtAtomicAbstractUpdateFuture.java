@@ -19,7 +19,6 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,7 +51,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
-import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
 
 /**
  * DHT atomic cache backup update future.
@@ -78,7 +76,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     protected final GridCacheContext cctx;
 
     /** Future version. */
-    protected final long futId;
+    protected final Long futId;
 
     /** Update request. */
     final GridNearAtomicAbstractUpdateRequest updateReq;
@@ -94,25 +92,31 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     private volatile int resCnt;
 
     /** */
-    private boolean repliedToNear;
+    private final GridNearAtomicUpdateResponse updateRes;
 
     /** */
-    private boolean affMapping = true;
+    private final GridDhtAtomicCache.UpdateReplyClosure completionCb;
 
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
      * @param updateReq Update request.
+     * @param updateRes Response.
+     * @param completionCb Callback to invoke to send response to near node.
      */
     protected GridDhtAtomicAbstractUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq
+        GridNearAtomicAbstractUpdateRequest updateReq,
+        GridNearAtomicUpdateResponse updateRes,
+        GridDhtAtomicCache.UpdateReplyClosure completionCb
     ) {
         this.cctx = cctx;
 
         this.updateReq = updateReq;
         this.writeVer = writeVer;
+        this.updateRes = updateRes;
+        this.completionCb = completionCb;
 
         futId = cctx.mvcc().atomicFutureId();
 
@@ -145,7 +149,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     }
 
     /**
-     * @param nearNodeId Near node ID.
      * @param entry Entry to map.
      * @param val Value to write.
      * @param entryProcessor Entry processor.
@@ -159,7 +162,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     @SuppressWarnings("ForLoopReplaceableByForEach")
     final void addWriteEntry(
         AffinityAssignment affAssignment,
-        UUID nearNodeId,
         GridDhtCacheEntry entry,
         @Nullable CacheObject val,
         EntryProcessor<Object, Object, Object> entryProcessor,
@@ -175,9 +177,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         List<ClusterNode> dhtNodes = cctx.dht().topology().nodes(entry.partition(), affAssignment, affNodes);
 
-        if (dhtNodes != null)
-            affMapping = false;
-        else
+        if (dhtNodes == null)
             dhtNodes = affNodes;
 
         if (log.isDebugEnabled())
@@ -198,7 +198,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                 if (updateReq == null) {
                     updateReq = createRequest(
                         node.id(),
-                        nearNodeId,
                         futId,
                         writeVer,
                         syncMode,
@@ -236,7 +235,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     protected abstract void addNearKey(KeyCacheObject key, Collection<UUID> readers);
 
     /**
-     * @param nearNodeId Near node ID.
      * @param readers Entry readers.
      * @param entry Entry.
      * @param val Value.
@@ -245,15 +243,12 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      * @param expireTime Expire time for near cache update (optional).
      */
     final void addNearWriteEntries(
-        UUID nearNodeId,
         Collection<UUID> readers,
         GridDhtCacheEntry entry,
         @Nullable CacheObject val,
         EntryProcessor<Object, Object, Object> entryProcessor,
         long ttl,
         long expireTime) {
-        affMapping = false;
-
         CacheWriteSynchronizationMode syncMode = updateReq.writeSynchronizationMode();
 
         addNearKey(entry.key(), readers);
@@ -272,7 +267,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
                 updateReq = createRequest(
                     node.id(),
-                    nearNodeId,
                     futId,
                     writeVer,
                     syncMode,
@@ -332,14 +326,11 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         GridDhtAtomicAbstractUpdateRequest req = mappings != null ? mappings.get(nodeId) : null;
 
-        boolean needReplyToNear = false;
+//        boolean needReplyToNear = false;
 
         if (req != null) {
             synchronized (this) {
                 if (req.onResponse()) {
-                    if (errors != null || (nodeErr && !repliedToNear))
-                        needReplyToNear = repliedToNear = true;
-
                     resCnt0 = resCnt;
 
                     resCnt0 += 1;
@@ -349,53 +340,50 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                 else
                     return false;
             }
-
-            if (needReplyToNear) {
-                assert !F.isEmpty(mappings);
-
-                List<UUID> dhtNodes = new ArrayList<>(mappings.size());
-
-                dhtNodes.addAll(mappings.keySet());
-
-                GridDhtAtomicNearResponse res = new GridDhtAtomicNearResponse(cctx.cacheId(),
-                    req.partition(),
-                    req.nearFutureId(),
-                    cctx.localNodeId(),
-                    dhtNodes,
-                    req.flags());
-
-                res.errors(errors);
-
-                res.failedNodeId(nodeId);
-
-                try {
-                    cctx.io().send(req.nearNodeId(), res, cctx.ioPolicy());
-
-                    if (msgLog.isDebugEnabled()) {
-                        msgLog.debug("DTH update fut, sent response on DHT node fail " +
-                            "[futId=" + futId +
-                            ", writeVer=" + writeVer +
-                            ", node=" + req.nearNodeId() +
-                            ", failedNode=" + nodeId + ']');
-                    }
-                }
-                catch (ClusterTopologyCheckedException ignored) {
-                    if (msgLog.isDebugEnabled()) {
-                        msgLog.debug("DTH update fut, failed to notify near node on DHT node fail, near node left " +
-                            "[futId=" + futId +
-                            ", writeVer=" + writeVer +
-                            ", node=" + req.nearNodeId() +
-                            ", failedNode=" + nodeId + ']');
-                    }
-                }
-                catch (IgniteCheckedException ignored) {
-                    U.error(msgLog, "DTH update fut, failed to notify near node on DHT node fail " +
-                        "[futId=" + futId +
-                        ", writeVer=" + writeVer +
-                        ", node=" + req.nearNodeId() +
-                        ", failedNode=" + nodeId + ']');
-                }
-            }
+//
+//            if (needReplyToNear) {
+//                assert !F.isEmpty(mappings);
+//
+//                List<UUID> dhtNodes = new ArrayList<>(mappings.size());
+//
+//                dhtNodes.addAll(mappings.keySet());
+//
+//                GridDhtAtomicNearResponse res = new GridDhtAtomicNearResponse(cctx.cacheId(),
+//                    req.partition(),
+//                    req.nearFutureId(),
+//                    cctx.localNodeId(),
+//                    req.flags());
+//
+//                res.errors(errors);
+//
+//                try {
+//                    cctx.io().send(req.nearNodeId(), res, cctx.ioPolicy());
+//
+//                    if (msgLog.isDebugEnabled()) {
+//                        msgLog.debug("DTH update fut, sent response on DHT node fail " +
+//                            "[futId=" + futId +
+//                            ", writeVer=" + writeVer +
+//                            ", node=" + req.nearNodeId() +
+//                            ", failedNode=" + nodeId + ']');
+//                    }
+//                }
+//                catch (ClusterTopologyCheckedException ignored) {
+//                    if (msgLog.isDebugEnabled()) {
+//                        msgLog.debug("DTH update fut, failed to notify near node on DHT node fail, near node left " +
+//                            "[futId=" + futId +
+//                            ", writeVer=" + writeVer +
+//                            ", node=" + req.nearNodeId() +
+//                            ", failedNode=" + nodeId + ']');
+//                    }
+//                }
+//                catch (IgniteCheckedException ignored) {
+//                    U.error(msgLog, "DTH update fut, failed to notify near node on DHT node fail " +
+//                        "[futId=" + futId +
+//                        ", writeVer=" + writeVer +
+//                        ", node=" + req.nearNodeId() +
+//                        ", failedNode=" + nodeId + ']');
+//                }
+//            }
 
             if (resCnt0 == mappings.size())
                 onDone();
@@ -406,97 +394,49 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         return false;
     }
 
-    final void init(GridNearAtomicUpdateResponse updateRes, GridCacheReturn ret) {
-        repliedToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
-            ret.hasValue() ||
-            updateRes.nearVersion() != null ||
-            updateRes.nodeId().equals(cctx.localNodeId());
-    }
-
     /**
      * Sends requests to remote nodes.
      *
-     * @param updateRes Response.
-     * @param completionCb Callback to invoke to send response to near node.
      * @param ret Cache operation return value.
      */
-    final void map(GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb,
-        GridCacheReturn ret) {
-        boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
-
-        boolean needReplyToNear = repliedToNear;
-
-        List<UUID> dhtNodes = null;
-
-        boolean affMapping = false;
-
-        if (fullSync) {
-            if (!F.isEmpty(mappings)) {
-                if (updateReq.size() == 1 && this.affMapping)
-                    affMapping = true;
-                else {
-                    dhtNodes = new ArrayList<>(mappings.size());
-
-                    dhtNodes.addAll(mappings.keySet());
-                }
-            }
-            else
-                dhtNodes = Collections.emptyList();
-        }
-        else
-            dhtNodes = Collections.emptyList();
-
-        updateRes.mapping(dhtNodes);
-
-        if (!F.isEmpty(mappings)) {
-            sendDhtRequests(fullSync && !needReplyToNear, dhtNodes, affMapping, ret);
-
-            if (needReplyToNear)
-                completionCb.apply(updateReq, updateRes);
-            else {
-                if (fullSync && GridDhtAtomicCache.IGNITE_ATOMIC_SND_MAPPING_TO_NEAR) {
-                    GridNearAtomicMappingResponse mappingRes = new GridNearAtomicMappingResponse(
-                        cctx.cacheId(),
-                        updateReq.partition(),
-                        updateReq.futureId(),
-                        dhtNodes,
-                        affMapping);
-
-                    try {
-                        cctx.io().send(updateRes.nodeId(), mappingRes, cctx.ioPolicy());
-                    }
-                    catch (IgniteCheckedException e) {
-                        U.error(msgLog, "Failed to send mapping response [futId=" + futId +
-                            ", writeVer=" + writeVer +
-                            ", node=" + updateRes.nodeId() + ']');
-                    }
-                }
-            }
-        }
-        else {
+    final void map(ClusterNode nearNode, GridCacheReturn ret) {
+        if (F.isEmpty(mappings)) {
             completionCb.apply(updateReq, updateRes);
 
             onDone();
+
+            return;
+        }
+
+        boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
+
+        if (updateReq.dhtReplyToNear()) {
+            assert fullSync;
+
+            boolean needReplyToNear = ret.hasValue() || updateRes.nearVersion() != null;
+
+            sendDhtRequests(true, nearNode, ret);
+
+            if (needReplyToNear)
+                completionCb.apply(updateReq, updateRes);
+        }
+        else {
+            sendDhtRequests(false, nearNode, ret);
+
+            if (!fullSync)
+                completionCb.apply(updateReq, updateRes);
         }
     }
 
     /**
      * @param nearReplyInfo {@code True} if need add information for near node response.
-     * @param dhtNodes DHT nodes.
      * @param ret Return value.
      */
-    private void sendDhtRequests(boolean nearReplyInfo, List<UUID> dhtNodes, boolean affMapping, GridCacheReturn ret) {
+    private void sendDhtRequests(boolean nearReplyInfo, ClusterNode nearNode, GridCacheReturn ret) {
         for (GridDhtAtomicAbstractUpdateRequest req : mappings.values()) {
             try {
                 if (nearReplyInfo) {
-                    if (affMapping) {
-                        assert dhtNodes == null;
-
-                        req.affinityMapping(true);
-                    }
-                    else
-                        req.dhtNodes(dhtNodes);
+                    req.nearReplyInfo(nearNode.id(), updateReq.futureId());
 
                     if (!ret.hasValue())
                         req.setResult(ret.success());
@@ -549,8 +489,13 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     }
 
     /**
+     * @param updateRes Response.
+     * @param err Error.
+     */
+    protected abstract void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err);
+
+    /**
      * @param nodeId Node ID.
-     * @param nearNodeId Near node ID.
      * @param futId Future ID.
      * @param writeVer Update version.
      * @param syncMode Write synchronization mode.
@@ -562,7 +507,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      */
     protected abstract GridDhtAtomicAbstractUpdateRequest createRequest(
         UUID nodeId,
-        UUID nearNodeId,
         long futId,
         GridCacheVersion writeVer,
         CacheWriteSynchronizationMode syncMode,
@@ -582,6 +526,13 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             if (cntQryClsrs != null) {
                 for (CI1<Boolean> clsr : cntQryClsrs)
                     clsr.apply(suc);
+            }
+
+            if (updateReq.writeSynchronizationMode() == FULL_SYNC && !updateReq.dhtReplyToNear()) {
+                if (!suc)
+                    addFailedKeys(updateRes, err);
+
+                completionCb.apply(updateReq, updateRes);
             }
 
             return true;

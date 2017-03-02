@@ -77,8 +77,6 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
      * @param cacheId Cache ID.
      * @param nodeId Node ID.
      * @param futId Future ID.
-     * @param fastMap Fast map scheme flag.
-     * @param updateVer Update version set if fast map is performed.
      * @param topVer Topology version.
      * @param topLocked Topology locked flag.
      * @param syncMode Synchronization mode.
@@ -89,15 +87,12 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
      * @param taskNameHash Task name hash code.
      * @param skipStore Skip write-through to a persistent storage.
      * @param keepBinary Keep binary flag.
-     * @param clientReq Client node request flag.
      * @param addDepInfo Deployment info flag.
      */
     GridNearAtomicSingleUpdateInvokeRequest(
         int cacheId,
         UUID nodeId,
         long futId,
-        boolean fastMap,
-        @Nullable GridCacheVersion updateVer,
         @NotNull AffinityTopologyVersion topVer,
         boolean topLocked,
         CacheWriteSynchronizationMode syncMode,
@@ -106,17 +101,15 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
         @Nullable Object[] invokeArgs,
         @Nullable UUID subjId,
         int taskNameHash,
+        boolean stableTop,
         boolean skipStore,
         boolean keepBinary,
-        boolean clientReq,
         boolean addDepInfo
     ) {
         super(
             cacheId,
             nodeId,
             futId,
-            fastMap,
-            updateVer,
             topVer,
             topLocked,
             syncMode,
@@ -124,9 +117,9 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
             retval,
             subjId,
             taskNameHash,
+            stableTop,
             skipStore,
             keepBinary,
-            clientReq,
             addDepInfo
         );
         this.invokeArgs = invokeArgs;
@@ -140,14 +133,12 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
      * @param conflictTtl Conflict TTL (optional).
      * @param conflictExpireTime Conflict expire time (optional).
      * @param conflictVer Conflict version (optional).
-     * @param primary If given key is primary on this mapping.
      */
     @Override public void addUpdateEntry(KeyCacheObject key,
         @Nullable Object val,
         long conflictTtl,
         long conflictExpireTime,
-        @Nullable GridCacheVersion conflictVer,
-        boolean primary) {
+        @Nullable GridCacheVersion conflictVer) {
         assert conflictTtl < 0 : conflictTtl;
         assert conflictExpireTime < 0 : conflictExpireTime;
         assert conflictVer == null : conflictVer;
@@ -156,9 +147,6 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
         entryProcessor = (EntryProcessor<Object, Object, Object>)val;
 
         this.key = key;
-        partId = key.partition();
-
-        hasPrimary(hasPrimary() | primary);
     }
 
     /** {@inheritDoc} */

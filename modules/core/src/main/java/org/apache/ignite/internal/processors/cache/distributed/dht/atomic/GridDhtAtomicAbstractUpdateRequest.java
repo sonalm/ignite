@@ -58,12 +58,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** */
     static final int DHT_ATOMIC_RESULT_SUCCESS_MASK = 0x10;
 
-    /** */
-    static final int DHT_ATOMIC_PRIMARY_DHT_FAIL_RESPONSE = 0x20;
-
-    /** */
-    static final int DHT_ATOMIC_AFF_MAPPING_FLAG_MASK = 0x40;
-
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
@@ -102,10 +96,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** Additional flags. */
     protected byte flags;
 
-    /** */
-    @GridDirectCollection(UUID.class)
-    private List<UUID> dhtNodes;
-
     /**
      * Empty constructor required by {@link Externalizable}.
      */
@@ -118,14 +108,10 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
      *
      * @param cacheId Cache ID.
      * @param nodeId Node ID.
-     * @param nearNodeId Near node ID.
-     * @param nearFutId Future ID on near node.
      */
     protected GridDhtAtomicAbstractUpdateRequest(int cacheId,
         UUID nodeId,
         long futId,
-        UUID nearNodeId,
-        long nearFutId,
         GridCacheVersion writeVer,
         CacheWriteSynchronizationMode syncMode,
         @NotNull AffinityTopologyVersion topVer,
@@ -138,8 +124,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         this.cacheId = cacheId;
         this.nodeId = nodeId;
         this.futId = futId;
-        this.nearNodeId = nearNodeId;
-        this.nearFutId = nearFutId;
         this.writeVer = writeVer;
         this.syncMode = syncMode;
         this.topVer = topVer;
@@ -153,11 +137,11 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
             setFlag(true, DHT_ATOMIC_KEEP_BINARY_FLAG_MASK);
     }
 
-    /**
-     * @param affMapping
-     */
-    public void affinityMapping(boolean affMapping) {
-        setFlag(affMapping, DHT_ATOMIC_AFF_MAPPING_FLAG_MASK);
+    void nearReplyInfo(UUID nearNodeId, long nearFutId) {
+        assert nearNodeId != null;
+
+        this.nearNodeId = nearNodeId;
+        this.nearFutId = nearFutId;
     }
 
     /**
@@ -174,20 +158,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
      */
     public UUID nearNodeId() {
         return nearNodeId;
-    }
-
-    /**
-     * @param dhtNodes DHT nodes.
-     */
-    void dhtNodes(List<UUID> dhtNodes) {
-        this.dhtNodes = dhtNodes;
-    }
-
-    /**
-     * @return DHT nodes.
-     */
-    List<UUID> dhtNodes() {
-        return dhtNodes;
     }
 
     /** {@inheritDoc} */
@@ -478,12 +448,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         }
 
         switch (writer.state()) {
-            case 3:
-                if (!writer.writeCollection("dhtNodes", dhtNodes, MessageCollectionItemType.UUID))
-                    return false;
-
-                writer.incrementState();
-
             case 4:
                 if (!writer.writeByte("flags", flags))
                     return false;
@@ -554,14 +518,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
             return false;
 
         switch (reader.state()) {
-            case 3:
-                dhtNodes = reader.readCollection("dhtNodes", MessageCollectionItemType.UUID);
-
-                if (!reader.isLastRead())
-                    return false;
-
-                reader.incrementState();
-
             case 4:
                 flags = reader.readByte("flags");
 

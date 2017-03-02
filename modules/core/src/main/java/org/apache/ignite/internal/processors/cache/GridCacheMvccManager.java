@@ -136,7 +136,7 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
     private volatile boolean stopping;
 
     /** */
-    private final AtomicLong atomicFutId = new AtomicLong();
+    private final AtomicLong atomicFutId = new AtomicLong(U.currentTimeMillis());
 
     /** Lock callback. */
     @GridToStringExclude

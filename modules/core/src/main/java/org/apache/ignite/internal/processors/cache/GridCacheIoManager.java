@@ -494,9 +494,7 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
      * @return Atomic future ID if applicable for message.
      */
     @Nullable private GridCacheVersion atomicWriteVersion(GridCacheMessage cacheMsg) {
-        if (cacheMsg instanceof GridNearAtomicAbstractUpdateRequest)
-            return ((GridNearAtomicAbstractUpdateRequest)cacheMsg).updateVersion();
-        else if (cacheMsg instanceof GridDhtAtomicAbstractUpdateRequest)
+        if (cacheMsg instanceof GridDhtAtomicAbstractUpdateRequest)
             return ((GridDhtAtomicAbstractUpdateRequest)cacheMsg).writeVersion();
 
         return null;

@@ -142,10 +142,7 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
         List<Integer> nearValsIdxs = res.nearValuesIndexes();
         List<Integer> skipped = res.skippedIndexes();
 
-        GridCacheVersion ver = req.updateVersion();
-
-        if (ver == null)
-            ver = res.nearVersion();
+        GridCacheVersion ver = res.nearVersion();
 
         assert ver != null : "Failed to find version [req=" + req + ", res=" + res + ']';
 
@@ -195,7 +192,6 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
                 processNearAtomicUpdateResponse(ver,
                     key,
                     val,
-                    null,
                     ttl,
                     expireTime,
                     req.keepBinary(),
@@ -213,7 +209,6 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
      * @param ver Version.
      * @param key Key.
      * @param val Value.
-     * @param valBytes Value bytes.
      * @param ttl TTL.
      * @param expireTime Expire time.
      * @param nodeId Node ID.
@@ -225,7 +220,6 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
         GridCacheVersion ver,
         KeyCacheObject key,
         @Nullable CacheObject val,
-        @Nullable byte[] valBytes,
         long ttl,
         long expireTime,
         boolean keepBinary,
@@ -242,7 +236,7 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
                 try {
                     entry = entryEx(key, topVer);
 
-                    GridCacheOperation op = (val != null || valBytes != null) ? UPDATE : DELETE;
+                    GridCacheOperation op = val != null ? UPDATE : DELETE;
 
                     GridCacheUpdateAtomicResult updRes = entry.innerUpdate(
                         ver,

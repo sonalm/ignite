@@ -21,14 +21,19 @@ import java.util.List;
 import java.util.UUID;
 import javax.cache.expiry.ExpiryPolicy;
 import javax.cache.processor.EntryProcessor;
+import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
+import org.apache.ignite.internal.GridDirectTransient;
+import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheEntryPredicate;
 import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.GridCacheDeployable;
 import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheOperation;
+import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -38,57 +43,267 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
-    /**
-     * @return Mapped node ID.
-     */
-    public abstract UUID nodeId();
+    /** Stable topology flag mask. */
+    private static final int STABLE_TOP_FLAG_MASK = 0x01;
+
+    /** Topology locked flag. Set if atomic update is performed inside TX or explicit lock. */
+    private static final int TOP_LOCKED_FLAG_MASK = 0x02;
+
+    /** Skip write-through to a persistent storage. */
+    private static final int SKIP_STORE_FLAG_MASK = 0x04;
+
+    /** Keep binary flag. */
+    private static final int KEEP_BINARY_FLAG_MASK = 0x08;
+
+    /** Return value flag. */
+    private static final int RET_VAL_FLAG_MASK = 0x10;
+
+    /** Target node ID. */
+    @GridDirectTransient
+    protected UUID nodeId;
+
+    /** Future version. */
+    protected long futId;
+
+    /** Topology version. */
+    protected AffinityTopologyVersion topVer;
+
+    /** Write synchronization mode. */
+    protected CacheWriteSynchronizationMode syncMode;
+
+    /** Update operation. */
+    protected GridCacheOperation op;
+
+    /** Subject ID. */
+    protected UUID subjId;
+
+    /** Task name hash. */
+    protected int taskNameHash;
+
+    /** Compressed boolean flags. */
+    protected byte flags;
+
+    /** */
+    @GridDirectTransient
+    private GridNearAtomicUpdateResponse res;
 
     /**
+     *
+     */
+    public GridNearAtomicAbstractUpdateRequest() {
+        // No-op.
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param cacheId Cache ID.
      * @param nodeId Node ID.
+     * @param futId Future ID.
+     * @param topVer Topology version.
+     * @param topLocked Topology locked flag.
+     * @param syncMode Synchronization mode.
+     * @param op Cache update operation.
+     * @param retval Return value required flag.
+     * @param subjId Subject ID.
+     * @param taskNameHash Task name hash code.
+     * @param skipStore Skip write-through to a persistent storage.
+     * @param keepBinary Keep binary flag.
+     * @param addDepInfo Deployment info flag.
      */
-    public abstract void nodeId(UUID nodeId);
+    protected GridNearAtomicAbstractUpdateRequest(
+        int cacheId,
+        UUID nodeId,
+        long futId,
+        @NotNull AffinityTopologyVersion topVer,
+        boolean topLocked,
+        CacheWriteSynchronizationMode syncMode,
+        GridCacheOperation op,
+        boolean retval,
+        @Nullable UUID subjId,
+        int taskNameHash,
+        boolean stableTop,
+        boolean skipStore,
+        boolean keepBinary,
+        boolean addDepInfo
+    ) {
+        this.cacheId = cacheId;
+        this.nodeId = nodeId;
+        this.futId = futId;
+        this.topVer = topVer;
+        this.syncMode = syncMode;
+        this.op = op;
+        this.subjId = subjId;
+        this.taskNameHash = taskNameHash;
+        this.addDepInfo = addDepInfo;
+
+        if (stableTop)
+            stableTopology(true);
+
+        if (topLocked)
+            topologyLocked(true);
+
+        if (retval)
+            returnValue(true);
+
+        if (skipStore)
+            skipStore(true);
+
+        if (keepBinary)
+            keepBinary(true);
+    }
+
+    /** {@inheritDoc} */
+    @Override public final int lookupIndex() {
+        return CACHE_MSG_IDX;
+    }
+
+    /** {@inheritDoc} */
+    @Override public final boolean addDeploymentInfo() {
+        return addDepInfo;
+    }
+
+    /** {@inheritDoc} */
+    @Override public final IgniteLogger messageLogger(GridCacheSharedContext ctx) {
+        return ctx.atomicMessageLogger();
+    }
+
+    boolean stableTopology() {
+        return isFlag(STABLE_TOP_FLAG_MASK);
+    }
+
+    boolean dhtReplyToNear() {
+        return stableTopology() && syncMode == CacheWriteSynchronizationMode.FULL_SYNC;
+    }
+
+    void stableTopology(boolean stableTop) {
+        setFlag(stableTop, STABLE_TOP_FLAG_MASK);
+    }
+
+    public int taskNameHash() {
+        return taskNameHash;
+    }
+
+    public GridCacheOperation operation() {
+        return op;
+    }
+
+    public UUID subjectId() {
+        return subjId;
+    }
+
+    public UUID nodeId() {
+        return nodeId;
+    }
+
+    void nodeId(UUID nodeId) {
+        this.nodeId = nodeId;
+    }
+
+    public long futureId() {
+        return futId;
+    }
+
+    public final CacheWriteSynchronizationMode writeSynchronizationMode() {
+        return syncMode;
+    }
 
     /**
-     * @return Subject ID.
+     * @param res Response.
+     * @return {@code True} if current response was {@code null}.
      */
-    public abstract UUID subjectId();
+    public boolean onResponse(GridNearAtomicUpdateResponse res) {
+        if (this.res == null) {
+            this.res = res;
+
+            return true;
+        }
+
+        return false;
+    }
 
     /**
-     * @return Task name hash.
+     * @return Response.
      */
-    public abstract int taskNameHash();
-
-    /**
-     * @return Future version.
-     */
-    public abstract long futureId();
-
-    /**
-     * @return Flag indicating whether this is fast-map udpate.
-     * TODO IGNITE-4705
-     */
-    public abstract boolean fastMap();
-
-    /**
-     * @return Update version for fast-map request.
-     * TODO IGNITE-4705
-     */
-    public abstract GridCacheVersion updateVersion();
+    @Nullable public GridNearAtomicUpdateResponse response() {
+        return res;
+    }
 
     /**
      * @return Topology locked flag.
      */
-    public abstract boolean topologyLocked();
+    public final boolean topologyLocked() {
+        return isFlag(TOP_LOCKED_FLAG_MASK);
+    }
 
     /**
-     * @return {@code True} if request sent from client node.
+     * Sets topologyLocked flag value.
      */
-    public abstract boolean clientRequest();
+    public final void topologyLocked(boolean val) {
+        setFlag(val, TOP_LOCKED_FLAG_MASK);
+    }
 
     /**
-     * @return Cache write synchronization mode.
+     * @return Return value flag.
      */
-    public abstract CacheWriteSynchronizationMode writeSynchronizationMode();
+    public final boolean returnValue() {
+        return isFlag(RET_VAL_FLAG_MASK);
+    }
+
+    /**
+     * Sets returnValue flag value.
+     */
+    public final void returnValue(boolean val) {
+        setFlag(val, RET_VAL_FLAG_MASK);
+    }
+
+    /**
+     * @return Skip write-through to a persistent storage.
+     */
+    public final boolean skipStore() {
+        return isFlag(SKIP_STORE_FLAG_MASK);
+    }
+
+    /**
+     * Sets skipStore flag value.
+     */
+    public void skipStore(boolean val) {
+        setFlag(val, SKIP_STORE_FLAG_MASK);
+    }
+
+    /**
+     * @return Keep binary flag.
+     */
+    public final boolean keepBinary() {
+        return isFlag(KEEP_BINARY_FLAG_MASK);
+    }
+
+    /**
+     * Sets keepBinary flag value.
+     */
+    public void keepBinary(boolean val) {
+        setFlag(val, KEEP_BINARY_FLAG_MASK);
+    }
+
+    /**
+     * Sets flag mask.
+     *
+     * @param flag Set or clear.
+     * @param mask Mask.
+     */
+    private void setFlag(boolean flag, int mask) {
+        flags = flag ? (byte)(flags | mask) : (byte)(flags & ~mask);
+    }
+
+    /**
+     * Reads flag mask.
+     *
+     * @param mask Mask to read.
+     * @return Flag value.
+     */
+    private boolean isFlag(int mask) {
+        return (flags & mask) != 0;
+    }
 
     /**
      * @return Expiry policy.
@@ -96,29 +311,9 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     public abstract ExpiryPolicy expiry();
 
     /**
-     * @return Return value flag.
-     */
-    public abstract boolean returnValue();
-
-    /**
      * @return Filter.
      */
     @Nullable public abstract CacheEntryPredicate[] filter();
-
-    /**
-     * @return Skip write-through to a persistent storage.
-     */
-    public abstract boolean skipStore();
-
-    /**
-     * @return Keep binary flag.
-     */
-    public abstract boolean keepBinary();
-
-    /**
-     * @return Update operation.
-     */
-    public abstract GridCacheOperation operation();
 
     /**
      * @return Optional arguments for entry processor.
@@ -126,36 +321,17 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     @Nullable public abstract Object[] invokeArguments();
 
     /**
-     * @return Flag indicating whether this request contains primary keys.
-     * TODO IGNITE-4705
-     */
-    public abstract boolean hasPrimary();
-
-    /**
-     * @param res Response.
-     * @return {@code True} if current response was {@code null}.
-     */
-    public abstract boolean onResponse(GridNearAtomicUpdateResponse res);
-
-    /**
-     * @return Response.
-     */
-    @Nullable public abstract GridNearAtomicUpdateResponse response();
-
-    /**
      * @param key Key to add.
      * @param val Optional update value.
      * @param conflictTtl Conflict TTL (optional).
      * @param conflictExpireTime Conflict expire time (optional).
      * @param conflictVer Conflict version (optional).
-     * @param primary If given key is primary on this mapping.
      */
-    public abstract void addUpdateEntry(KeyCacheObject key,
+    abstract void addUpdateEntry(KeyCacheObject key,
         @Nullable Object val,
         long conflictTtl,
         long conflictExpireTime,
-        @Nullable GridCacheVersion conflictVer,
-        boolean primary);
+        @Nullable GridCacheVersion conflictVer);
 
     /**
      * @return Keys for this update request.
@@ -184,7 +360,6 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
      * @return Write value - either value, or transform closure.
      */
     public abstract CacheObject writeValue(int idx);
-
 
     /**
      * @return Conflict versions.

@@ -269,7 +269,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
                 if (msgLog.isDebugEnabled()) {
                     msgLog.debug("Near update fut, sent request [futId=" + req.futureId() +
-                        ", writeVer=" + req.updateVersion() +
                         ", node=" + req.nodeId() + ']');
                 }
 
@@ -279,7 +278,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             catch (IgniteCheckedException e) {
                 if (msgLog.isDebugEnabled()) {
                     msgLog.debug("Near update fut, failed to send request [futId=" + req.futureId() +
-                        ", writeVer=" + req.updateVersion() +
                         ", node=" + req.nodeId() +
                         ", err=" + e + ']');
                 }
@@ -303,12 +301,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param res Response.
      */
     public abstract void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res);
-
-    /**
-     * @param nodeId Node ID.
-     * @param res Response.
-     */
-    public abstract void onMappingReceived(UUID nodeId, GridNearAtomicMappingResponse res);
 
     /**
      * @param req Request.
@@ -423,23 +415,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         }
 
         /**
-         * @param cctx Context.
-         * @param res Response.
-         * @return {@code True} if request processing finished.
-         */
-        boolean onMappingReceived(GridCacheContext cctx, GridNearAtomicMappingResponse res) {
-            if (finished() || mapping != null)
-                return false;
-
-            if (res.affinityMapping())
-                initAffinityMapping(cctx, null);
-            else
-                initMapping(cctx, res.mapping(), null);
-
-            return finished();
-        }
-
-        /**
          * @param nodeId Node ID.
          * @return {@code True} if request processing finished.
          */
@@ -465,41 +440,41 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             if (finished())
                 return false;
 
-            if (res.primaryDhtFailureResponse()) {
-                assert res.mapping() != null : res;
-                assert res.failedNodeId() != null : res;
-
-                nodeId = res.failedNodeId();
-            }
-
-            if (res.hasResult())
-                hasRes = true;
-
-            if (res.affinityMapping()) {
-                if (mapping == null) {
-                    initAffinityMapping(cctx, nodeId);
-
-                    return finished();
-                }
-            } else if (res.mapping() != null) {
-                // Mapping is sent from dht nodes.
-                if (mapping == null) {
-                    initMapping(cctx, res.mapping(), nodeId);
-
-                    return finished();
-                }
-            }
-            else {
-                // Mapping and result are sent from primary.
-                if (mapping == null) {
-                    if (rcvd == null)
-                        rcvd = new HashSet<>();
-
-                    rcvd.add(nodeId);
-
-                    return false; // Need wait for response from primary.
-                }
-            }
+//            if (res.primaryDhtFailureResponse()) {
+//                assert res.mapping() != null : res;
+//                assert res.failedNodeId() != null : res;
+//
+//                nodeId = res.failedNodeId();
+//            }
+//
+//            if (res.hasResult())
+//                hasRes = true;
+//
+//            if (res.affinityMapping()) {
+//                if (mapping == null) {
+//                    initAffinityMapping(cctx, nodeId);
+//
+//                    return finished();
+//                }
+//            } else if (res.mapping() != null) {
+//                // Mapping is sent from dht nodes.
+//                if (mapping == null) {
+//                    initMapping(cctx, res.mapping(), nodeId);
+//
+//                    return finished();
+//                }
+//            }
+//            else {
+//                // Mapping and result are sent from primary.
+//                if (mapping == null) {
+//                    if (rcvd == null)
+//                        rcvd = new HashSet<>();
+//
+//                    rcvd.add(nodeId);
+//
+//                    return false; // Need wait for response from primary.
+//                }
+//            }
 
             return mapping.remove(nodeId) && finished();
         }
@@ -523,12 +498,12 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             assert res.returnValue() != null : res;
 
-            if (res.mapping() != null) {
-                if (mapping == null)
-                    initMapping(cctx, res.mapping(), null);
-            }
-            else
-                initAffinityMapping(cctx, null);
+//            if (res.mapping() != null) {
+//                if (mapping == null)
+//                    initMapping(cctx, res.mapping(), null);
+//            }
+//            else
+//                initAffinityMapping(cctx, null);
 
             return finished();
         }
