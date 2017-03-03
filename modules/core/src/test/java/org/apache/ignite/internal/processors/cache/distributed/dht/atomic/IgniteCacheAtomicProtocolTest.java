@@ -203,6 +203,46 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
+    public void testPutBackupFailure1() throws Exception {
+        startGrids(4);
+
+        client = true;
+
+        Ignite client = startGrid(4);
+
+        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
+
+        awaitPartitionMapExchange();
+
+        Ignite srv0 = ignite(0);
+
+        Integer key = primaryKey(srv0.cache(TEST_CACHE));
+
+        Ignite backup = backup(client.affinity(TEST_CACHE), key);
+
+        testSpi(backup).blockMessages(GridDhtAtomicNearResponse.class, client.name());
+
+        log.info("Start put [key=" + key + ']');
+
+        nearAsyncCache.put(key, key);
+
+        IgniteFuture<?> fut = nearAsyncCache.future();
+
+        U.sleep(500);
+
+        assertFalse(fut.isDone());
+
+        stopGrid(backup.name());
+
+        fut.get();
+
+        checkData(F.asMap(key, key));
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
     public void testFullAsyncPutRemap() throws Exception {
         fullAsyncRemap(false);
     }
@@ -390,12 +430,27 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         for (int i = 0; i < SRVS; i++)
             testSpi(grid(i)).blockMessages(GridDhtAtomicNearResponse.class, clientNode.name());
 
-        Map<Integer, Integer> map = new HashMap<>();
+        final Map<Integer, Integer> map = new HashMap<>();
 
         for (int i = 0; i < 100; i++)
             map.put(i, i);
 
         nearAsyncCache.putAll(map);
+
+        boolean wait = GridTestUtils.waitForCondition(new GridAbsPredicate() {
+            @Override public boolean apply() {
+                IgniteCache cache = ignite(0).cache(TEST_CACHE);
+
+                for (Integer key : map.keySet()) {
+                    if (cache.get(key) == null)
+                        return false;
+                }
+
+                return true;
+            }
+        }, 5000);
+
+        assertTrue(wait);
 
         stopGrid(SRVS);
 
@@ -497,6 +552,8 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      * @param expData Expected cache data.
      */
     private void checkData(Map<Integer, Integer> expData) {
+        assert !expData.isEmpty();
+
         List<Ignite> nodes = G.allGrids();
 
         assertFalse(nodes.isEmpty());

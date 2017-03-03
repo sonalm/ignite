@@ -63,21 +63,12 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /** Future ID. */
     private long futId;
 
-    /** Update error. */
-    @GridDirectTransient
-    private volatile IgniteCheckedException err;
-
-    /** Serialized error. */
-    private byte[] errBytes;
+    /** */
+    private UpdateErrors errs;
 
     /** Return value. */
     @GridToStringInclude
     private GridCacheReturn ret;
-
-    /** Failed keys. */
-    @GridToStringInclude
-    @GridDirectCollection(KeyCacheObject.class)
-    private volatile Collection<KeyCacheObject> failedKeys;
 
     /** */
     private AffinityTopologyVersion remapTopVer;
@@ -107,6 +98,11 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /** Partition ID. */
     private int partId = -1;
 
+    /** */
+    @GridDirectCollection(UUID.class)
+    @GridToStringInclude
+    private List<UUID> dhtNodes;
+
     /**
      * Empty constructor required by {@link Externalizable}.
      */
@@ -130,6 +126,14 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /** {@inheritDoc} */
     @Override public int lookupIndex() {
         return CACHE_MSG_IDX;
+    }
+
+    public void dhtNodes(List<UUID> dhtNodes) {
+        this.dhtNodes = dhtNodes;
+    }
+
+    public List<UUID> dhtNodes() {
+        return dhtNodes;
     }
 
     /**
@@ -166,19 +170,22 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param err Error.
      */
     public void error(IgniteCheckedException err){
-        this.err = err;
+        if (errs == null)
+            errs = new UpdateErrors();
+
+        errs.onError(err);
     }
 
     /** {@inheritDoc} */
     @Override public IgniteCheckedException error() {
-        return err;
+        return errs != null ? errs.error() : null;
     }
 
     /**
      * @return Collection of failed keys.
      */
     public Collection<KeyCacheObject> failedKeys() {
-        return failedKeys;
+        return errs != null ? errs.failedKeys() : null;
     }
 
     /**
@@ -348,15 +355,10 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param e Error cause.
      */
     public synchronized void addFailedKey(KeyCacheObject key, Throwable e) {
-        if (failedKeys == null)
-            failedKeys = new ConcurrentLinkedQueue<>();
+        if (errs == null)
+            errs = new UpdateErrors();
 
-        failedKeys.add(key);
-
-        if (err == null)
-            err = new IgniteCheckedException("Failed to update keys on primary node.");
-
-        err.addSuppressed(e);
+        errs.addFailedKey(key, e);
     }
 
     /**
@@ -365,37 +367,11 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param keys Key to add.
      * @param e Error cause.
      */
-    public synchronized void addFailedKeys(Collection<KeyCacheObject> keys, Throwable e) {
-        if (keys != null) {
-            if (failedKeys == null)
-                failedKeys = new ArrayList<>(keys.size());
+    synchronized void addFailedKeys(Collection<KeyCacheObject> keys, Throwable e) {
+        if (errs == null)
+            errs = new UpdateErrors();
 
-            failedKeys.addAll(keys);
-        }
-
-        if (err == null)
-            err = new IgniteCheckedException("Failed to update keys on primary node.");
-
-        err.addSuppressed(e);
-    }
-
-    /**
-     * Adds keys to collection of failed keys.
-     *
-     * @param keys Key to add.
-     * @param e Error cause.
-     * @param ctx Context.
-     */
-    public synchronized void addFailedKeys(Collection<KeyCacheObject> keys, Throwable e, GridCacheContext ctx) {
-        if (failedKeys == null)
-            failedKeys = new ArrayList<>(keys.size());
-
-        failedKeys.addAll(keys);
-
-        if (err == null)
-            err = new IgniteCheckedException("Failed to update keys on primary node.");
-
-        err.addSuppressed(e);
+        errs.addFailedKeys(keys, e);
     }
 
     /** {@inheritDoc}
@@ -403,12 +379,10 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     @Override public void prepareMarshal(GridCacheSharedContext ctx) throws IgniteCheckedException {
         super.prepareMarshal(ctx);
 
-        if (err != null && errBytes == null)
-            errBytes = U.marshal(ctx, err);
-
         GridCacheContext cctx = ctx.cacheContext(cacheId);
 
-        prepareMarshalCacheObjects(failedKeys, cctx);
+        if (errs != null)
+            errs.prepareMarshal(this, cctx);
 
         prepareMarshalCacheObjects(nearVals, cctx);
 
@@ -420,12 +394,10 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     @Override public void finishUnmarshal(GridCacheSharedContext ctx, ClassLoader ldr) throws IgniteCheckedException {
         super.finishUnmarshal(ctx, ldr);
 
-        if (errBytes != null && err == null)
-            err = U.unmarshal(ctx, errBytes, U.resolveClassLoader(ldr, ctx.gridConfig()));
-
         GridCacheContext cctx = ctx.cacheContext(cacheId);
 
-        finishUnmarshalCacheObjects(failedKeys, cctx, ldr);
+        if (errs != null)
+            errs.finishUnmarshal(this, cctx, ldr);
 
         finishUnmarshalCacheObjects(nearVals, cctx, ldr);
 
@@ -464,13 +436,13 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
         switch (writer.state()) {
             case 3:
-                if (!writer.writeByteArray("errBytes", errBytes))
+                if (!writer.writeCollection("dhtNodes", dhtNodes, MessageCollectionItemType.UUID))
                     return false;
 
                 writer.incrementState();
 
             case 4:
-                if (!writer.writeCollection("failedKeys", failedKeys, MessageCollectionItemType.MSG))
+                if (!writer.writeMessage("errs", errs))
                     return false;
 
                 writer.incrementState();
@@ -552,7 +524,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
 
         switch (reader.state()) {
             case 3:
-                errBytes = reader.readByteArray("errBytes");
+                dhtNodes = reader.readCollection("dhtNodes", MessageCollectionItemType.UUID);
 
                 if (!reader.isLastRead())
                     return false;
@@ -560,7 +532,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
                 reader.incrementState();
 
             case 4:
-                failedKeys = reader.readCollection("failedKeys", MessageCollectionItemType.MSG);
+                errs = reader.readMessage("errs");
 
                 if (!reader.isLastRead())
                     return false;

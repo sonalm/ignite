@@ -92,7 +92,7 @@ public class GridNearAtomicSingleUpdateRequest extends GridNearAtomicAbstractSin
         boolean retval,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean stableTop,
+        boolean mappingKnown,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo
@@ -107,7 +107,7 @@ public class GridNearAtomicSingleUpdateRequest extends GridNearAtomicAbstractSin
             retval,
             subjId,
             taskNameHash,
-            stableTop,
+            mappingKnown,
             skipStore,
             keepBinary,
             addDepInfo);

@@ -38,6 +38,9 @@ class GridDhtAtomicUpdateFuture extends GridDhtAtomicAbstractUpdateFuture {
     /** */
     private static final long serialVersionUID = 0L;
 
+    /** */
+    private int updateCntr;
+
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
@@ -56,8 +59,15 @@ class GridDhtAtomicUpdateFuture extends GridDhtAtomicAbstractUpdateFuture {
     }
 
     /** {@inheritDoc} */
+    @Override protected boolean allUpdated() {
+        return updateCntr == updateReq.size();
+    }
+
+    /** {@inheritDoc} */
     @Override protected void addDhtKey(KeyCacheObject key, List<ClusterNode> dhtNodes) {
-        // No-op.
+        assert updateCntr < updateReq.size();
+
+        updateCntr++;
     }
 
     /** {@inheritDoc} */

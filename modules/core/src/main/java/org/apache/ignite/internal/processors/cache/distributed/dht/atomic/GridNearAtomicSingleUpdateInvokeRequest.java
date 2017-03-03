@@ -101,7 +101,7 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
         @Nullable Object[] invokeArgs,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean stableTop,
+        boolean mappingKnown,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo
@@ -117,14 +117,15 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
             retval,
             subjId,
             taskNameHash,
-            stableTop,
+            mappingKnown,
             skipStore,
             keepBinary,
             addDepInfo
         );
-        this.invokeArgs = invokeArgs;
 
         assert op == TRANSFORM : op;
+
+        this.invokeArgs = invokeArgs;
     }
 
     /**

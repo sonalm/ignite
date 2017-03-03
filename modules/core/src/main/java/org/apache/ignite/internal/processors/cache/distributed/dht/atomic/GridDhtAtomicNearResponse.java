@@ -31,7 +31,6 @@ import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.Nullable;
 
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
-import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_RESULT_SUCCESS_MASK;
 
 /**
  * TODO IGNITE-4705: no not send mapping if it == affinity?
@@ -131,7 +130,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     public GridCacheReturn result() {
         assert hasResult() : this;
 
-        return new GridCacheReturn(true, isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK));
+        return new GridCacheReturn(true, true);
     }
 
     /**
@@ -312,7 +311,6 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     @Override public String toString() {
         return S.toString(GridDhtAtomicNearResponse.class, this,
             "flags",
-            "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK) +
-            "|resOk=" + isFlag(DHT_ATOMIC_RESULT_SUCCESS_MASK));
+            "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK));
     }
 }

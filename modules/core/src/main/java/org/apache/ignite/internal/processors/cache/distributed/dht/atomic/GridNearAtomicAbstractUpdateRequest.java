@@ -46,8 +46,8 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
-    /** Stable topology flag mask. */
-    private static final int STABLE_TOP_FLAG_MASK = 0x01;
+    /** . */
+    private static final int MAPPING_KNOWN_FLAG_MASK = 0x01;
 
     /** Topology locked flag. Set if atomic update is performed inside TX or explicit lock. */
     private static final int TOP_LOCKED_FLAG_MASK = 0x02;
@@ -125,7 +125,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         boolean retval,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean stableTop,
+        boolean mappingKnown,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo
@@ -140,8 +140,8 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         this.taskNameHash = taskNameHash;
         this.addDepInfo = addDepInfo;
 
-        if (stableTop)
-            stableTopology(true);
+        if (mappingKnown)
+            mappingKnown(true);
 
         if (topLocked)
             topologyLocked(true);
@@ -176,16 +176,22 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return ctx.atomicMessageLogger();
     }
 
-    boolean stableTopology() {
-        return isFlag(STABLE_TOP_FLAG_MASK);
+    boolean initMappingLocally() {
+        return mappingKnown() && fullSync();
     }
 
-    boolean dhtReplyToNear() {
-        return stableTopology() && syncMode == CacheWriteSynchronizationMode.FULL_SYNC;
+    boolean mappingKnown() {
+        return isFlag(MAPPING_KNOWN_FLAG_MASK);
     }
 
-    void stableTopology(boolean stableTop) {
-        setFlag(stableTop, STABLE_TOP_FLAG_MASK);
+    boolean fullSync() {
+        assert syncMode != null;
+
+        return syncMode == CacheWriteSynchronizationMode.FULL_SYNC;
+    }
+
+    void mappingKnown(boolean stableTop) {
+        setFlag(stableTop, MAPPING_KNOWN_FLAG_MASK);
     }
 
     public int taskNameHash() {

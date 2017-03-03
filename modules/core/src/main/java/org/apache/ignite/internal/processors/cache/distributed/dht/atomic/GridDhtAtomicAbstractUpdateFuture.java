@@ -19,6 +19,7 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,6 +36,7 @@ import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.GridCacheAtomicFuture;
 import org.apache.ignite.internal.processors.cache.GridCacheContext;
+import org.apache.ignite.internal.processors.cache.GridCacheEntryRemovedException;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheEntry;
@@ -50,7 +52,7 @@ import org.apache.ignite.lang.IgniteUuid;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
 
 /**
  * DHT atomic cache backup update future.
@@ -125,6 +127,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             log = U.logger(cctx.kernalContext(), logRef, GridDhtAtomicUpdateFuture.class);
         }
     }
+
+    protected abstract boolean allUpdated();
 
     /** {@inheritDoc} */
     @Override public final IgniteInternalFuture<Void> completeFuture(AffinityTopologyVersion topVer) {
@@ -324,8 +328,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         GridDhtAtomicAbstractUpdateRequest req = mappings != null ? mappings.get(nodeId) : null;
 
-//        boolean needReplyToNear = false;
-
         if (req != null) {
             synchronized (this) {
                 if (req.onResponse()) {
@@ -338,50 +340,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                 else
                     return false;
             }
-//
-//            if (needReplyToNear) {
-//                assert !F.isEmpty(mappings);
-//
-//                List<UUID> dhtNodes = new ArrayList<>(mappings.size());
-//
-//                dhtNodes.addAll(mappings.keySet());
-//
-//                GridDhtAtomicNearResponse res = new GridDhtAtomicNearResponse(cctx.cacheId(),
-//                    req.partition(),
-//                    req.nearFutureId(),
-//                    cctx.localNodeId(),
-//                    req.flags());
-//
-//                res.errors(errors);
-//
-//                try {
-//                    cctx.io().send(req.nearNodeId(), res, cctx.ioPolicy());
-//
-//                    if (msgLog.isDebugEnabled()) {
-//                        msgLog.debug("DTH update fut, sent response on DHT node fail " +
-//                            "[futId=" + futId +
-//                            ", writeVer=" + writeVer +
-//                            ", node=" + req.nearNodeId() +
-//                            ", failedNode=" + nodeId + ']');
-//                    }
-//                }
-//                catch (ClusterTopologyCheckedException ignored) {
-//                    if (msgLog.isDebugEnabled()) {
-//                        msgLog.debug("DTH update fut, failed to notify near node on DHT node fail, near node left " +
-//                            "[futId=" + futId +
-//                            ", writeVer=" + writeVer +
-//                            ", node=" + req.nearNodeId() +
-//                            ", failedNode=" + nodeId + ']');
-//                    }
-//                }
-//                catch (IgniteCheckedException ignored) {
-//                    U.error(msgLog, "DTH update fut, failed to notify near node on DHT node fail " +
-//                        "[futId=" + futId +
-//                        ", writeVer=" + writeVer +
-//                        ", node=" + req.nearNodeId() +
-//                        ", failedNode=" + nodeId + ']');
-//                }
-//            }
 
             if (resCnt0 == mappings.size())
                 onDone();
@@ -399,6 +357,8 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
      */
     final void map(ClusterNode nearNode, GridCacheReturn ret) {
         if (F.isEmpty(mappings)) {
+            updateRes.dhtNodes(Collections.<UUID>emptyList());
+
             completionCb.apply(updateReq, updateRes);
 
             onDone();
@@ -406,41 +366,53 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             return;
         }
 
-        boolean fullSync = updateReq.writeSynchronizationMode() == FULL_SYNC;
+        boolean needReplyToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
+            !ret.emptyResult() ||
+            updateRes.nearVersion() != null;
 
-        if (updateReq.dhtReplyToNear()) {
-            assert fullSync;
+        boolean needMapping = updateReq.fullSync() && (!updateReq.mappingKnown() || !allUpdated());
 
-            boolean needReplyToNear = ret.hasValue() || updateRes.nearVersion() != null;
+        if (needMapping) {
+            initMapping(updateRes);
 
-            sendDhtRequests(true, nearNode, ret);
-
-            if (needReplyToNear)
-                completionCb.apply(updateReq, updateRes);
+            needReplyToNear = true;
         }
-        else {
-            sendDhtRequests(false, nearNode, ret);
 
-            if (!fullSync)
-                completionCb.apply(updateReq, updateRes);
+        sendDhtRequests(nearNode, ret);
+
+        if (needReplyToNear)
+            completionCb.apply(updateReq, updateRes);
+    }
+
+    private void initMapping(GridNearAtomicUpdateResponse updateRes) {
+        List<UUID> dhtNodes;
+
+        if (!F.isEmpty(mappings)) {
+            dhtNodes = new ArrayList<>(mappings.size());
+
+            dhtNodes.addAll(mappings.keySet());
         }
+        else
+            dhtNodes = Collections.emptyList();
+
+        updateRes.dhtNodes(dhtNodes);
     }
 
     /**
-     * @param nearReplyInfo {@code True} if need add information for near node response.
+     * @param nearNode Near node.
      * @param ret Return value.
      */
-    private void sendDhtRequests(boolean nearReplyInfo, ClusterNode nearNode, GridCacheReturn ret) {
+    private void sendDhtRequests(ClusterNode nearNode, GridCacheReturn ret) {
         for (GridDhtAtomicAbstractUpdateRequest req : mappings.values()) {
             try {
-                if (nearReplyInfo) {
+                assert !cctx.localNodeId().equals(req.nodeId()) : req;
+
+                if (updateReq.fullSync()) {
                     req.nearReplyInfo(nearNode.id(), updateReq.futureId());
 
-                    if (!ret.hasValue())
-                        req.setResult(ret.success());
+                    if (ret.emptyResult())
+                        req.hasResult(true);
                 }
-
-                assert !cctx.localNodeId().equals(req.nodeId()) : req;
 
                 cctx.io().send(req.nodeId(), req, cctx.ioPolicy());
 
@@ -467,23 +439,32 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     }
 
     /**
-     * @param nodeId Node ID.
-     * @param res Response.
-     */
-    public final void onDhtResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
-        assert !updateReq.dhtReplyToNear();
-
-        registerResponse(nodeId);
-    }
-
-    /**
      * Deferred update response.
      *
      * @param nodeId Backup node ID.
      */
-    public final void onDeferredResponse(UUID nodeId) {
+    final void onDeferredResponse(UUID nodeId) {
         if (log.isDebugEnabled())
             log.debug("Received deferred DHT atomic update future result [nodeId=" + nodeId + ']');
+
+        registerResponse(nodeId);
+    }
+
+    final void onDhtResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
+        if (!F.isEmpty(res.nearEvicted())) {
+            for (KeyCacheObject key : res.nearEvicted()) {
+                try {
+                    GridDhtCacheEntry entry = (GridDhtCacheEntry)cctx.cache().peekEx(key);
+
+                    if (entry != null)
+                        entry.removeReader(nodeId, res.messageId());
+                }
+                catch (GridCacheEntryRemovedException e) {
+                    if (log.isDebugEnabled())
+                        log.debug("Entry with evicted reader was removed [key=" + key + ", err=" + e + ']');
+                }
+            }
+        }
 
         registerResponse(nodeId);
     }
@@ -526,13 +507,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             if (cntQryClsrs != null) {
                 for (CI1<Boolean> clsr : cntQryClsrs)
                     clsr.apply(suc);
-            }
-
-            if (updateReq.writeSynchronizationMode() == FULL_SYNC && !updateReq.dhtReplyToNear()) {
-                if (!suc)
-                    addFailedKeys(updateRes, err);
-
-                completionCb.apply(updateReq, updateRes);
             }
 
             return true;

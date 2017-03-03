@@ -17,6 +17,8 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -29,6 +31,7 @@ import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.cluster.ClusterNode;
+import org.apache.ignite.internal.cluster.ClusterTopologyCheckedException;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheEntryPredicate;
 import org.apache.ignite.internal.processors.cache.CachePartialUpdateCheckedException;
@@ -37,6 +40,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheContext;
 import org.apache.ignite.internal.processors.cache.GridCacheMvccManager;
 import org.apache.ignite.internal.processors.cache.GridCacheOperation;
 import org.apache.ignite.internal.processors.cache.GridCacheReturn;
+import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
 import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.CU;
@@ -46,6 +50,8 @@ import org.apache.ignite.lang.IgniteUuid;
 import org.jetbrains.annotations.Nullable;
 
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
 
 /**
  * Base for near atomic update futures.
@@ -199,6 +205,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         this.remapCnt = remapCnt;
     }
 
+    void sendCheckUpdateRequest(GridNearAtomicCheckUpdateRequest req) {
+
+    }
+
     /**
      * Performs future mapping.
      */
@@ -303,6 +313,48 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      */
     public abstract void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res);
 
+    final void onPrimaryError(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
+        assert res.error() != null;
+
+        if (err == null)
+            err = new CachePartialUpdateCheckedException("Failed to update keys (retry update if possible).");
+
+        Collection<Object> keys = new ArrayList<>(res.failedKeys().size());
+
+        for (KeyCacheObject key : res.failedKeys())
+            keys.add(cctx.cacheObjectContext().unwrapBinaryIfNeeded(key, keepBinary, false));
+
+        err.add(keys, res.error(), req.topologyVersion());
+    }
+
+    /**
+     * @param req Request.
+     * @return Response to notify about primary failure.
+     */
+    final GridNearAtomicUpdateResponse primaryFailedResponse(GridNearAtomicAbstractUpdateRequest req) {
+        assert req.response() == null : req;
+        assert req.nodeId() != null : req;
+
+        if (msgLog.isDebugEnabled()) {
+            msgLog.debug("Near update fut, node left [futId=" + req.futureId() +
+                ", node=" + req.nodeId() + ']');
+        }
+
+        GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
+            req.nodeId(),
+            req.futureId(),
+            cctx.deploymentEnabled());
+
+        ClusterTopologyCheckedException e = new ClusterTopologyCheckedException("Primary node left grid " +
+            "before response is received: " + req.nodeId());
+
+        e.retryReadyFuture(cctx.shared().nextAffinityReadyFuture(req.topologyVersion()));
+
+        res.addFailedKeys(req.keys(), e);
+
+        return res;
+    }
+
     /**
      * @param req Request.
      * @param e Error.
@@ -330,6 +382,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         private Set<UUID> dhtNodes;
 
         /** */
+        private Set<UUID> rcvd;
+
+        /** */
         private boolean hasRes;
 
         /**
@@ -340,7 +395,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             this.req = req;
 
-            if (req.dhtReplyToNear()) {
+            if (req.initMappingLocally()) {
                 if (single) {
                     if (nodes.size() > 1) {
                         dhtNodes = U.newHashSet(nodes.size() - 1);
@@ -360,14 +415,20 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             }
         }
 
+        UUID primaryId() {
+            return req.nodeId();
+        }
+
         void addMapping(List<ClusterNode> nodes) {
-            assert req.dhtReplyToNear();
+            assert req.initMappingLocally();
 
             for (int i = 1; i < nodes.size(); i++)
                 dhtNodes.add(nodes.get(i).id());
         }
 
         boolean checkDhtNodes(GridCacheContext cctx) {
+            assert req.initMappingLocally() : req;
+
             if (finished())
                 return false;
 
@@ -394,7 +455,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if all expected responses are received.
          */
         private boolean finished() {
-            return req.dhtReplyToNear() ? (dhtNodes.isEmpty() && hasRes) : hasRes;
+            if (req.writeSynchronizationMode() == PRIMARY_SYNC)
+                return hasRes;
+
+            return (dhtNodes != null && dhtNodes.isEmpty()) && hasRes;
         }
 
         /**
@@ -415,11 +479,18 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @param nodeId Node ID.
          * @return {@code True} if request processing finished.
          */
-        boolean onNodeLeft(UUID nodeId) {
-            if (!req.dhtReplyToNear() || finished())
-                return false;
+        DhtLeftResult onDhtNodeLeft(UUID nodeId) {
+            if (req.writeSynchronizationMode() != FULL_SYNC || dhtNodes == null || finished())
+                return DhtLeftResult.NOT_DONE;
 
-            return dhtNodes.remove(nodeId) && finished();
+            if (dhtNodes.remove(nodeId) && dhtNodes.isEmpty()) {
+                if (hasRes)
+                    return DhtLeftResult.DONE;
+                else
+                    return req.mappingKnown() ? DhtLeftResult.ALL_RCVD_CHECK_UPDATE : DhtLeftResult.NOT_DONE;
+            }
+
+            return DhtLeftResult.NOT_DONE;
         }
 
         /**
@@ -430,7 +501,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
          * @return {@code True} if request processing finished.
          */
         boolean onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res) {
-            assert req.dhtReplyToNear();
+            assert req.writeSynchronizationMode() == FULL_SYNC : req;
 
             if (finished())
                 return false;
@@ -438,14 +509,23 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             if (res.hasResult())
                 hasRes = true;
 
-            return dhtNodes != null && dhtNodes.remove(nodeId) && finished();
+            if (dhtNodes == null) {
+                if (rcvd == null)
+                    rcvd = new HashSet<>();
+
+                rcvd.add(nodeId);
+
+                return false;
+            }
+
+            return dhtNodes.remove(nodeId) && finished();
         }
 
         /**
          * @param res Response.
          * @return {@code True} if request processing finished.
          */
-        boolean onPrimaryResponse(GridNearAtomicUpdateResponse res) {
+        boolean onPrimaryResponse(GridNearAtomicUpdateResponse res, GridCacheContext cctx) {
             assert !finished() : this;
 
             hasRes = true;
@@ -454,12 +534,39 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             assert onRes;
 
-            if (res.error() != null || res.remapTopologyVersion() != null)
+            if (res.error() != null || res.remapTopologyVersion() != null) {
+                dhtNodes = Collections.emptySet(); // Mark as finished.
+
                 return true;
+            }
 
             assert res.returnValue() != null : res;
 
+            if (res.dhtNodes() != null)
+                initDhtNodes(res.dhtNodes(), cctx);
+
             return finished();
+        }
+
+        private void initDhtNodes(List<UUID> nodeIds, GridCacheContext cctx) {
+            assert dhtNodes == null || req.initMappingLocally();
+
+            dhtNodes = null;
+
+            for (UUID dhtNodeId : nodeIds) {
+                if ((rcvd != null && rcvd.contains(dhtNodeId)))
+                    continue;
+
+                if (cctx.discovery().node(dhtNodeId) != null) {
+                    if (dhtNodes == null)
+                        dhtNodes = U.newHashSet(nodeIds.size());
+
+                    dhtNodes.add(dhtNodeId);
+                }
+            }
+
+            if (dhtNodes == null)
+                dhtNodes = Collections.emptySet();
         }
 
         /** {@inheritDoc} */
@@ -468,6 +575,20 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 "node", req.nodeId(),
                 "rcvdRes", req.response() != null);
         }
+    }
+
+    /**
+     *
+     */
+    enum DhtLeftResult {
+        /** */
+        DONE,
+
+        /** */
+        NOT_DONE,
+
+        /** */
+        ALL_RCVD_CHECK_UPDATE
     }
 
     /** {@inheritDoc} */

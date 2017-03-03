@@ -60,7 +60,6 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
     private Object key;
 
     /** Values. */
-    @SuppressWarnings({"FieldAccessedSynchronizedAndUnsynchronized"})
     private Object val;
 
     /** */
@@ -135,50 +134,55 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
     /** {@inheritDoc} */
     @Override public boolean onNodeLeft(UUID nodeId) {
-        GridNearAtomicAbstractUpdateRequest req;
-        GridNearAtomicUpdateResponse res = null;
         GridCacheReturn opRes0 = null;
         CachePartialUpdateCheckedException err0 = null;
         AffinityTopologyVersion remapTopVer0 = null;
+
+        GridNearAtomicCheckUpdateRequest checkReq = null;
 
         synchronized (mux) {
             if (reqState == null)
                 return false;
 
-            req = reqState.processPrimaryResponse(nodeId);
+            boolean rcvAll = false;
 
-            if (req != null) {
-                res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
-                    nodeId,
-                    req.futureId(),
-                    cctx.deploymentEnabled());
+            if (reqState.req.nodeId.equals(nodeId)) {
+                GridNearAtomicAbstractUpdateRequest req = reqState.processPrimaryResponse(nodeId);
 
-                ClusterTopologyCheckedException e = new ClusterTopologyCheckedException("Primary node left grid " +
-                    "before response is received: " + nodeId);
+                if (req != null) {
+                    GridNearAtomicUpdateResponse res = primaryFailedResponse(req);
 
-                e.retryReadyFuture(cctx.shared().nextAffinityReadyFuture(req.topologyVersion()));
+                    rcvAll = true;
 
-                res.addFailedKeys(req.keys(), e);
+                    reqState.onPrimaryResponse(res, cctx);
+
+                    onPrimaryError(req, res);
+                }
             }
             else {
-                if (reqState.onNodeLeft(nodeId)) {
-                    opRes0 = opRes;
-                    err0 = err;
-                    remapTopVer0 = onAllReceived();
+                DhtLeftResult res = reqState.onDhtNodeLeft(nodeId);
+
+                if (res == DhtLeftResult.DONE)
+                    rcvAll = true;
+                else if (res == DhtLeftResult.ALL_RCVD_CHECK_UPDATE) {
+                    checkReq = new GridNearAtomicCheckUpdateRequest(cctx.cacheId(),
+                        reqState.req,
+                        reqState.req.partition(),
+                        futId);
                 }
                 else
                     return false;
             }
-        }
 
-        if (res != null) {
-            if (msgLog.isDebugEnabled()) {
-                msgLog.debug("Near update single fut, node left [futId=" + req.futureId() +
-                    ", node=" + nodeId + ']');
+            if (rcvAll) {
+                opRes0 = opRes;
+                err0 = err;
+                remapTopVer0 = onAllReceived();
             }
-
-            onPrimaryResponse(nodeId, res, true);
         }
+
+        if (checkReq != null)
+            sendCheckUpdateRequest(checkReq);
         else
             finishUpdateFuture(opRes0, err0, remapTopVer0);
 
@@ -281,22 +285,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 remapTopVer = res.remapTopologyVersion();
             }
-            else if (res.error() != null) {
-                if (res.failedKeys() != null) {
-                    assert res.failedKeys().size() == 1 : res.failedKeys();
-
-                    if (err == null)
-                        err = new CachePartialUpdateCheckedException(
-                            "Failed to update keys (retry update if possible).");
-
-                    Collection<Object> keys = new ArrayList<>(res.failedKeys().size());
-
-                    for (KeyCacheObject key : res.failedKeys())
-                        keys.add(cctx.cacheObjectContext().unwrapBinaryIfNeeded(key, keepBinary, false));
-
-                    err.add(keys, res.error(), req.topologyVersion());
-                }
-            }
+            else if (res.error() != null)
+                onPrimaryError(req, res);
             else {
                 GridCacheReturn ret = res.returnValue();
 
@@ -317,7 +307,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 assert reqState != null;
 
-                if (!reqState.onPrimaryResponse(res))
+                if (!reqState.onPrimaryResponse(res, cctx))
                     return;
             }
 
@@ -515,7 +505,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 return;
             }
 
-            if (reqState.req.dhtReplyToNear() && (cctx.discovery().topologyVersion() != topVer.topologyVersion())) {
+            if (reqState.req.initMappingLocally() && (cctx.discovery().topologyVersion() != topVer.topologyVersion())) {
                 if (!checkDhtNodes(futId))
                     return;
             }
@@ -601,7 +591,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         else
             val = EntryProcessorResourceInjectorProxy.wrap(cctx.kernalContext(), (EntryProcessor)val);
 
-        boolean stableTop = cctx.topology().rebalanceFinished(topVer) &&
+        boolean mappingKnown = cctx.topology().rebalanceFinished(topVer) &&
             !cctx.discovery().hasNearCache(cctx.cacheId(), topVer);
 
         List<ClusterNode> nodes = cctx.affinity().nodesByKey(cacheKey, topVer);
@@ -628,7 +618,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                     invokeArgs,
                     subjId,
                     taskNameHash,
-                    stableTop,
+                    mappingKnown,
                     skipStore,
                     keepBinary,
                     cctx.deploymentEnabled());
@@ -646,7 +636,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                         retval,
                         subjId,
                         taskNameHash,
-                        stableTop,
+                        mappingKnown,
                         skipStore,
                         keepBinary,
                         cctx.deploymentEnabled());
@@ -664,7 +654,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                         filter,
                         subjId,
                         taskNameHash,
-                        stableTop,
+                        mappingKnown,
                         skipStore,
                         keepBinary,
                         cctx.deploymentEnabled());
@@ -686,7 +676,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 filter,
                 subjId,
                 taskNameHash,
-                stableTop,
+                mappingKnown,
                 skipStore,
                 keepBinary,
                 cctx.deploymentEnabled(),

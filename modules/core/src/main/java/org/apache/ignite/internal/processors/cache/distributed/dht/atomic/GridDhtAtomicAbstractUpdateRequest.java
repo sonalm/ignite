@@ -55,9 +55,6 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** */
     static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
 
-    /** */
-    static final int DHT_ATOMIC_RESULT_SUCCESS_MASK = 0x10;
-
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
@@ -145,12 +142,10 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     }
 
     /**
-     * @param success Success flag.
+     * @param res Result flag.
      */
-    public void setResult(boolean success) {
-        setFlag(true, DHT_ATOMIC_HAS_RESULT_MASK);
-
-        setFlag(success, DHT_ATOMIC_RESULT_SUCCESS_MASK);
+    public void hasResult(boolean res) {
+        setFlag(res, DHT_ATOMIC_HAS_RESULT_MASK);
     }
 
     /**

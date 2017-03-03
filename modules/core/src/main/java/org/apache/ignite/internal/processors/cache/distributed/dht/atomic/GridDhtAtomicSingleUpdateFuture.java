@@ -39,6 +39,9 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     /** */
     private static final long serialVersionUID = 0L;
 
+    /** */
+    private boolean allUpdated;
+
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
@@ -55,9 +58,17 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     }
 
     /** {@inheritDoc} */
+    @Override protected boolean allUpdated() {
+        return allUpdated;
+    }
+
+    /** {@inheritDoc} */
     @Override protected void addDhtKey(KeyCacheObject key, List<ClusterNode> dhtNodes) {
-        if (mappings == null)
+        if (mappings == null) {
+            allUpdated = true;
+
             mappings = U.newHashMap(dhtNodes.size());
+        }
     }
 
     /** {@inheritDoc} */

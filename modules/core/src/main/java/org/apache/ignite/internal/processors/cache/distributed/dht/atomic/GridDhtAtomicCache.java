@@ -49,6 +49,7 @@ import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.CacheOperationContext;
 import org.apache.ignite.internal.processors.cache.CacheStorePartialUpdateException;
 import org.apache.ignite.internal.processors.cache.EntryGetResult;
+import org.apache.ignite.internal.processors.cache.GridCacheAtomicFuture;
 import org.apache.ignite.internal.processors.cache.GridCacheConcurrentMap;
 import org.apache.ignite.internal.processors.cache.GridCacheContext;
 import org.apache.ignite.internal.processors.cache.GridCacheEntryEx;
@@ -107,8 +108,6 @@ import org.jetbrains.annotations.Nullable;
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_BUFFER_SIZE;
 import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
-import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
-import static org.apache.ignite.internal.GridTopic.TOPIC_CACHE;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.DELETE;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.TRANSFORM;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.UPDATE;
@@ -377,6 +376,19 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     "[msgIdx=" + GridDhtAtomicNearResponse.CACHE_MSG_IDX + ']';
             }
         });
+
+        ctx.io().addHandler(ctx.cacheId(),
+            GridNearAtomicCheckUpdateRequest.class,
+            new CI2<UUID, GridNearAtomicCheckUpdateRequest>() {
+                @Override public void apply(UUID uuid, GridNearAtomicCheckUpdateRequest msg) {
+                    processCheckUpdateRequest(uuid, msg);
+                }
+
+                @Override public String toString() {
+                    return "GridNearAtomicCheckUpdateRequest handler " +
+                        "[msgIdx=" + GridNearAtomicCheckUpdateRequest.CACHE_MSG_IDX + ']';
+                }
+            });
 
         if (near == null) {
             ctx.io().addHandler(
@@ -1984,9 +1996,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         for (int i = 0; i < locked.size(); i++) {
             GridDhtCacheEntry entry = locked.get(i);
 
-            if (entry == null)
-                continue;
-
             try {
                 if (!checkFilter(entry, req, res)) {
                     if (expiry != null && entry.hasValue()) {
@@ -2784,7 +2793,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             }
         }
         catch (IgniteCheckedException e) {
-            res.addFailedKeys(putMap != null ? putMap.keySet() : rmvKeys, e, ctx);
+            res.addFailedKeys(putMap != null ? putMap.keySet() : rmvKeys, e);
         }
 
         if (storeErr != null) {
@@ -2793,7 +2802,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             for (Object failedKey : storeErr.failedKeys())
                 failed.add(ctx.toCacheKeyObject(failedKey));
 
-            res.addFailedKeys(failed, storeErr.getCause(), ctx);
+            res.addFailedKeys(failed, storeErr.getCause());
         }
 
         return dhtFut;
@@ -3065,6 +3074,32 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     }
 
     /**
+     * @param nodeId Node ID.
+     * @param checkReq Request.
+     */
+    private void processCheckUpdateRequest(UUID nodeId, GridNearAtomicCheckUpdateRequest checkReq) {
+        /**
+         * Message is processed in the same stripe, so primary already processed update request. It is possible
+         * response was not sent if operation result was empty. Near node will get original response or this one.
+         */
+        GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(ctx.cacheId(),
+            nodeId,
+            checkReq.futureId(),
+            false);
+
+        GridCacheReturn ret = new GridCacheReturn(false, true);
+
+        res.returnValue(ret);
+
+        try {
+            ctx.io().send(nodeId, res, ctx.ioPolicy());
+        }
+        catch (IgniteCheckedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
      * @param nodeId Sender node ID.
      * @param req Dht atomic update request.
      */
@@ -3078,7 +3113,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         GridCacheVersion ver = req.writeVersion();
 
-        GridDhtAtomicUpdateResponse dhtRes = null;
         GridDhtAtomicNearResponse nearRes = null;
 
         if (req.nearNodeId() != null) {
@@ -3087,12 +3121,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 req.nearFutureId(),
                 nodeId,
                 req.flags());
-        }
-        else if (req.writeSynchronizationMode() == FULL_SYNC) {
-            dhtRes = new GridDhtAtomicUpdateResponse(ctx.cacheId(),
-                req.partition(),
-                req.futureId(),
-                ctx.deploymentEnabled());
         }
 
         boolean replicate = ctx.isDrEnabled();
@@ -3182,40 +3210,34 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                 if (nearRes != null)
                     nearRes.addFailedKey(key, err);
-                else if (dhtRes != null)
-                    dhtRes.addFailedKey(key, err);
 
                 U.error(log, "Failed to update key on backup node: " + key, e);
             }
         }
+
+        GridDhtAtomicUpdateResponse dhtRes = null;
 
         if (isNearEnabled(cacheCfg)) {
             List<KeyCacheObject> nearEvicted =
                 ((GridNearAtomicCache<K, V>)near()).processDhtAtomicUpdateRequest(nodeId, req, nearRes);
 
             if (nearEvicted != null) {
-                if (dhtRes == null) {
-                    dhtRes = new GridDhtAtomicUpdateResponse(ctx.cacheId(),
-                        req.partition(),
-                        req.futureId(),
-                        ctx.deploymentEnabled());
-                }
+                dhtRes = new GridDhtAtomicUpdateResponse(ctx.cacheId(),
+                    req.partition(),
+                    req.futureId(),
+                    ctx.deploymentEnabled());
 
                 dhtRes.nearEvicted(nearEvicted);
             }
         }
 
-        if (nearRes != null) {
+        if (nearRes != null)
             sendDhtNearResponse(req, nearRes);
 
+        if (dhtRes != null)
+            sendDhtPrimaryResponse(nodeId, req, dhtRes);
+        else
             sendDeferredUpdateResponse(req.partition(), nodeId, req.futureId());
-        }
-        else {
-            if (dhtRes != null)
-                sendDhtPrimaryResponse(nodeId, req, dhtRes);
-            else
-                sendDeferredUpdateResponse(req.partition(), nodeId, req.futureId());
-        }
     }
 
     /**
@@ -3459,24 +3481,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     @SuppressWarnings("unchecked")
     private void processDhtAtomicUpdateResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
-        if (!F.isEmpty(res.nearEvicted())) {
-            for (KeyCacheObject key : res.nearEvicted()) {
-                try {
-                    GridDhtCacheEntry entry = (GridDhtCacheEntry)ctx.cache().peekEx(key);
-
-                    if (entry != null)
-                        entry.removeReader(nodeId, res.messageId());
-                }
-                catch (GridCacheEntryRemovedException e) {
-                    if (log.isDebugEnabled())
-                        log.debug("Entry with evicted reader was removed [key=" + key + ", err=" + e + ']');
-                }
-            }
-        }
-
-
         GridDhtAtomicAbstractUpdateFuture updateFut =
-                (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
+            (GridDhtAtomicAbstractUpdateFuture)ctx.mvcc().atomicFuture(res.futureId());
 
         if (updateFut != null) {
             if (msgLog.isDebugEnabled()) {
@@ -3488,7 +3494,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         }
         else {
             U.warn(msgLog, "Failed to find DHT update future for update response [futId=" + res.futureId() +
-                    ", node=" + nodeId + ", res=" + res + ']');
+                ", node=" + nodeId + ", res=" + res + ']');
         }
     }
 

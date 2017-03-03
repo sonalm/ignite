@@ -88,7 +88,7 @@ public class UpdateErrors implements Message {
      * @param key Key to add.
      * @param e Error cause.
      */
-    public void addFailedKey(KeyCacheObject key, Throwable e) {
+    void addFailedKey(KeyCacheObject key, Throwable e) {
         if (failedKeys == null)
             failedKeys = new ArrayList<>();
 
@@ -96,6 +96,18 @@ public class UpdateErrors implements Message {
 
         if (err == null)
             err = new IgniteCheckedException("Failed to update keys.");
+
+        err.addSuppressed(e);
+    }
+
+    void addFailedKeys(Collection<KeyCacheObject> keys, Throwable e) {
+        if (failedKeys == null)
+            failedKeys = new ArrayList<>(keys.size());
+
+        failedKeys.addAll(keys);
+
+        if (err == null)
+            err = new IgniteCheckedException("Failed to update keys on primary node.");
 
         err.addSuppressed(e);
     }
