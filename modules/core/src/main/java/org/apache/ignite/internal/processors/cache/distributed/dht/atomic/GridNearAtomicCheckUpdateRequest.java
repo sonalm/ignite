@@ -51,14 +51,13 @@ public class GridNearAtomicCheckUpdateRequest extends GridCacheMessage {
         // No-op.
     }
 
-    GridNearAtomicCheckUpdateRequest(int cacheId, GridNearAtomicAbstractUpdateRequest updateReq, int partId, long futId) {
+    GridNearAtomicCheckUpdateRequest(GridNearAtomicAbstractUpdateRequest updateReq) {
         assert updateReq != null;
-        assert partId >= 0 : partId;
 
-        this.cacheId = cacheId;
         this.updateReq = updateReq;
-        this.partId = partId;
-        this.futId = futId;
+        this.cacheId = updateReq.cacheId();
+        this.partId = updateReq.partition();
+        this.futId = updateReq.futureId();
     }
 
     long futureId() {

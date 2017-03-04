@@ -3078,7 +3078,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param checkReq Request.
      */
     private void processCheckUpdateRequest(UUID nodeId, GridNearAtomicCheckUpdateRequest checkReq) {
-        /**
+        /*
          * Message is processed in the same stripe, so primary already processed update request. It is possible
          * response was not sent if operation result was empty. Near node will get original response or this one.
          */
@@ -3104,6 +3104,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param req Dht atomic update request.
      */
     private void processDhtAtomicUpdateRequest(UUID nodeId, GridDhtAtomicAbstractUpdateRequest req) {
+        assert Thread.currentThread().getName().startsWith("sys-stripe-") : Thread.currentThread().getName();
+
         if (msgLog.isDebugEnabled()) {
             msgLog.debug("Received DHT atomic update request [futId=" + req.futureId() +
                 ", writeVer=" + req.writeVersion() + ", node=" + nodeId + ']');
@@ -3272,66 +3274,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     }
 
     /**
-     *
-     */
-    private class DeferredUpdateTimeout implements GridTimeoutObject, Runnable {
-        /** */
-        private final int part;
-
-        /** */
-        private final UUID primaryId;
-
-        /** */
-        private final IgniteUuid id;
-
-        /** */
-        private final long endTime;
-
-        /**
-         * @param part Partition.
-         * @param primaryId Primary ID.
-         */
-        DeferredUpdateTimeout(int part, UUID primaryId) {
-            this.part = part;
-            this.primaryId = primaryId;
-
-            endTime = U.currentTimeMillis() + DEFERRED_UPDATE_RESPONSE_TIMEOUT;
-
-            id = IgniteUuid.fromUuid(primaryId);
-        }
-
-        /** {@inheritDoc} */
-        @Override public IgniteUuid timeoutId() {
-            return id;
-        }
-
-        /** {@inheritDoc} */
-        @Override public long endTime() {
-            return endTime;
-        }
-
-        /** {@inheritDoc} */
-        @Override public void run() {
-            Map<UUID, GridDhtAtomicDeferredUpdateResponse> resMap = defRes.get();
-
-            GridDhtAtomicDeferredUpdateResponse msg = resMap.get(primaryId);
-
-            if (msg != null && msg.timeoutSender() == this) {
-                msg.timeoutSender(null);
-
-                resMap.remove(primaryId);
-
-                sendDeferredUpdateResponse(primaryId, msg);
-            }
-        }
-
-        /** {@inheritDoc} */
-        @Override public void onTimeout() {
-            ctx.kernalContext().getStripedExecutorService().execute(part, this);
-        }
-    }
-
-    /**
      * @param part Partition.
      * @param primaryId Primary ID.
      * @param futId Future ID.
@@ -3362,7 +3304,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         futIds.add(futId);
 
-        if (futIds.size() == DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE) {
+        if (futIds.size() >= DEFERRED_UPDATE_RESPONSE_BUFFER_SIZE) {
             resMap.remove(primaryId);
 
             sendDeferredUpdateResponse(primaryId, msg);
@@ -3375,14 +3317,14 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      */
     private void sendDeferredUpdateResponse(UUID primaryId, GridDhtAtomicDeferredUpdateResponse msg) {
         try {
-            ctx.kernalContext().gateway().readLock();
-
-            GridTimeoutObject timeoutSnd = msg.timeoutSender();
-
-            if (timeoutSnd != null)
-                ctx.time().removeTimeoutObject(timeoutSnd);
+            //ctx.kernalContext().gateway().readLock();
 
             try {
+                GridTimeoutObject timeoutSnd = msg.timeoutSender();
+
+                if (timeoutSnd != null)
+                    ctx.time().removeTimeoutObject(timeoutSnd);
+
                 ctx.io().send(primaryId, msg, ctx.ioPolicy());
 
                 if (msgLog.isDebugEnabled()) {
@@ -3391,7 +3333,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 }
             }
             finally {
-                ctx.kernalContext().gateway().readUnlock();
+               // ctx.kernalContext().gateway().readUnlock();
             }
         }
         catch (IllegalStateException ignored) {
@@ -3706,7 +3648,67 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     /**
      *
      */
-    static interface UpdateReplyClosure extends CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse> {
+    interface UpdateReplyClosure extends CI2<GridNearAtomicAbstractUpdateRequest, GridNearAtomicUpdateResponse> {
         // No-op.
+    }
+
+    /**
+     *
+     */
+    private class DeferredUpdateTimeout implements GridTimeoutObject, Runnable {
+        /** */
+        private final int part;
+
+        /** */
+        private final UUID primaryId;
+
+        /** */
+        private final IgniteUuid id;
+
+        /** */
+        private final long endTime;
+
+        /**
+         * @param part Partition.
+         * @param primaryId Primary ID.
+         */
+        DeferredUpdateTimeout(int part, UUID primaryId) {
+            this.part = part;
+            this.primaryId = primaryId;
+
+            endTime = U.currentTimeMillis() + DEFERRED_UPDATE_RESPONSE_TIMEOUT;
+
+            id = IgniteUuid.fromUuid(primaryId);
+        }
+
+        /** {@inheritDoc} */
+        @Override public IgniteUuid timeoutId() {
+            return id;
+        }
+
+        /** {@inheritDoc} */
+        @Override public long endTime() {
+            return endTime;
+        }
+
+        /** {@inheritDoc} */
+        @Override public void run() {
+            Map<UUID, GridDhtAtomicDeferredUpdateResponse> resMap = defRes.get();
+
+            GridDhtAtomicDeferredUpdateResponse msg = resMap.get(primaryId);
+
+            if (msg != null && msg.timeoutSender() == this) {
+                msg.timeoutSender(null);
+
+                resMap.remove(primaryId);
+
+                sendDeferredUpdateResponse(primaryId, msg);
+            }
+        }
+
+        /** {@inheritDoc} */
+        @Override public void onTimeout() {
+            ctx.kernalContext().getStripedExecutorService().execute(part, this);
+        }
     }
 }

@@ -62,6 +62,8 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.GridClientPar
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionState;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionTopology;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtTopologyFuture;
+import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateFuture;
+import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicCache;
 import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionDemandMessage;
 import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionExchangeId;
 import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionFullMap;
@@ -79,6 +81,7 @@ import org.apache.ignite.internal.processors.cache.transactions.IgniteTxManager;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.processors.timeout.GridTimeoutObject;
 import org.apache.ignite.internal.util.GridListSet;
+import org.apache.ignite.internal.util.StripedExecutor;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
 import org.apache.ignite.internal.util.lang.IgnitePair;
 import org.apache.ignite.internal.util.tostring.GridToStringExclude;
@@ -1477,68 +1480,70 @@ public class GridCachePartitionExchangeManager<K, V> extends GridCacheSharedMana
      * @param exchTopVer Exchange topology version.
      */
     private void dumpPendingObjects(@Nullable AffinityTopologyVersion exchTopVer) {
-        IgniteTxManager tm = cctx.tm();
-
-        if (tm != null) {
-            U.warn(log, "Pending transactions:");
-
-            for (IgniteInternalTx tx : tm.activeTransactions()) {
-                if (exchTopVer != null) {
-                    U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() +
-                        ", exchWait=" + tm.needWaitTransaction(tx, exchTopVer) +
-                        ", tx=" + tx + ']');
-                }
-                else
-                    U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() + ", tx=" + tx + ']');
-            }
-        }
-
-        GridCacheMvccManager mvcc = cctx.mvcc();
-
-        if (mvcc != null) {
-            U.warn(log, "Pending explicit locks:");
-
-            for (GridCacheExplicitLockSpan lockSpan : mvcc.activeExplicitLocks())
-                U.warn(log, ">>> " + lockSpan);
-
-            U.warn(log, "Pending cache futures:");
-
-            for (GridCacheFuture<?> fut : mvcc.activeFutures())
-                U.warn(log, ">>> " + fut);
-
-            U.warn(log, "Pending atomic cache futures:");
-
-            for (GridCacheFuture<?> fut : mvcc.atomicFutures())
-                U.warn(log, ">>> " + fut);
-
-            U.warn(log, "Pending data streamer futures:");
-
-            for (IgniteInternalFuture<?> fut : mvcc.dataStreamerFutures())
-                U.warn(log, ">>> " + fut);
+        synchronized (getClass()) {
+            IgniteTxManager tm = cctx.tm();
 
             if (tm != null) {
-                U.warn(log, "Pending transaction deadlock detection futures:");
+                U.warn(log, "Pending transactions:");
 
-                for (IgniteInternalFuture<?> fut : tm.deadlockDetectionFutures())
-                    U.warn(log, ">>> " + fut);
+                for (IgniteInternalTx tx : tm.activeTransactions()) {
+                    if (exchTopVer != null) {
+                        U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() +
+                                ", exchWait=" + tm.needWaitTransaction(tx, exchTopVer) +
+                                ", tx=" + tx + ']');
+                    }
+                    else
+                        U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() + ", tx=" + tx + ']');
+                }
             }
-        }
 
-        for (GridCacheContext ctx : cctx.cacheContexts()) {
-            if (ctx.isLocal())
-                continue;
+            GridCacheMvccManager mvcc = cctx.mvcc();
 
-            GridCacheContext ctx0 = ctx.isNear() ? ctx.near().dht().context() : ctx;
+            if (mvcc != null) {
+                U.warn(log, "Pending explicit locks:");
 
-            GridCachePreloader preloader = ctx0.preloader();
+                for (GridCacheExplicitLockSpan lockSpan : mvcc.activeExplicitLocks())
+                    U.warn(log, ">>> " + lockSpan);
 
-            if (preloader != null)
-                preloader.dumpDebugInfo();
+                U.warn(log, "Pending cache futures:");
 
-            GridCacheAffinityManager affMgr = ctx0.affinity();
+                for (GridCacheFuture<?> fut : mvcc.activeFutures())
+                    U.warn(log, ">>> " + fut);
 
-            if (affMgr != null)
-                affMgr.dumpDebugInfo();
+                U.warn(log, "Pending atomic cache futures:");
+
+                for (GridCacheFuture<?> fut : mvcc.atomicFutures())
+                    U.warn(log, ">>> " + fut);
+
+                U.warn(log, "Pending data streamer futures:");
+
+                for (IgniteInternalFuture<?> fut : mvcc.dataStreamerFutures())
+                    U.warn(log, ">>> " + fut);
+
+                if (tm != null) {
+                    U.warn(log, "Pending transaction deadlock detection futures:");
+
+                    for (IgniteInternalFuture<?> fut : tm.deadlockDetectionFutures())
+                        U.warn(log, ">>> " + fut);
+                }
+            }
+
+            for (GridCacheContext ctx : cctx.cacheContexts()) {
+                if (ctx.isLocal())
+                    continue;
+
+                GridCacheContext ctx0 = ctx.isNear() ? ctx.near().dht().context() : ctx;
+
+                GridCachePreloader preloader = ctx0.preloader();
+
+                if (preloader != null)
+                    preloader.dumpDebugInfo();
+
+                GridCacheAffinityManager affMgr = ctx0.affinity();
+
+                if (affMgr != null)
+                    affMgr.dumpDebugInfo();
+            }
         }
     }
 

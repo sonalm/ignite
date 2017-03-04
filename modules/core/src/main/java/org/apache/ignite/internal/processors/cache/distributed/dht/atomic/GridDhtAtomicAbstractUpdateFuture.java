@@ -43,6 +43,7 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtCacheE
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
 import org.apache.ignite.internal.util.tostring.GridToStringExclude;
+import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.CI1;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.S;
@@ -78,6 +79,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     protected final GridCacheContext cctx;
 
     /** Future version. */
+    @GridToStringInclude
     protected final Long futId;
 
     /** Update request. */
@@ -94,9 +96,11 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     private volatile int resCnt;
 
     /** */
+    @GridToStringExclude
     private final GridNearAtomicUpdateResponse updateRes;
 
     /** */
+    @GridToStringExclude
     private final GridDhtAtomicCache.UpdateReplyClosure completionCb;
 
     /**
@@ -368,9 +372,10 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         boolean needReplyToNear = updateReq.writeSynchronizationMode() == PRIMARY_SYNC ||
             !ret.emptyResult() ||
-            updateRes.nearVersion() != null;
+            updateRes.nearVersion() != null ||
+            cctx.localNodeId().equals(nearNode.id());
 
-        boolean needMapping = updateReq.fullSync() && (!updateReq.mappingKnown() || !allUpdated());
+        boolean needMapping = updateReq.fullSync() && (!updateReq.needPrimaryResponse() || !allUpdated());
 
         if (needMapping) {
             initMapping(updateRes);
@@ -468,12 +473,6 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
         registerResponse(nodeId);
     }
-
-    /**
-     * @param updateRes Response.
-     * @param err Error.
-     */
-    protected abstract void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err);
 
     /**
      * @param nodeId Node ID.

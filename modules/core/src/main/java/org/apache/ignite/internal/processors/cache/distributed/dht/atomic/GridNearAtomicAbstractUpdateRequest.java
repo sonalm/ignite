@@ -47,7 +47,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     public static final int CACHE_MSG_IDX = nextIndexId();
 
     /** . */
-    private static final int MAPPING_KNOWN_FLAG_MASK = 0x01;
+    private static final int NEED_PRIMARY_RES_FLAG_MASK = 0x01;
 
     /** Topology locked flag. Set if atomic update is performed inside TX or explicit lock. */
     private static final int TOP_LOCKED_FLAG_MASK = 0x02;
@@ -141,7 +141,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         this.addDepInfo = addDepInfo;
 
         if (mappingKnown)
-            mappingKnown(true);
+            needPrimaryResponse(true);
 
         if (topLocked)
             topologyLocked(true);
@@ -177,11 +177,11 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     }
 
     boolean initMappingLocally() {
-        return mappingKnown() && fullSync();
+        return needPrimaryResponse() && fullSync();
     }
 
-    boolean mappingKnown() {
-        return isFlag(MAPPING_KNOWN_FLAG_MASK);
+    boolean needPrimaryResponse() {
+        return isFlag(NEED_PRIMARY_RES_FLAG_MASK);
     }
 
     boolean fullSync() {
@@ -190,8 +190,8 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return syncMode == CacheWriteSynchronizationMode.FULL_SYNC;
     }
 
-    void mappingKnown(boolean stableTop) {
-        setFlag(stableTop, MAPPING_KNOWN_FLAG_MASK);
+    void needPrimaryResponse(boolean stableTop) {
+        setFlag(stableTop, NEED_PRIMARY_RES_FLAG_MASK);
     }
 
     public int taskNameHash() {

@@ -1750,7 +1750,7 @@ public class IgniteCacheClientNodeChangingTopologyTest extends GridCommonAbstrac
         for (int i = 0; i < SRV_CNT; i++)
             startGrid(i);
 
-        final int CLIENT_CNT = 4;
+        final int CLIENT_CNT = 1;
 
         final List<Ignite> clients = new ArrayList<>();
 
@@ -1768,7 +1768,7 @@ public class IgniteCacheClientNodeChangingTopologyTest extends GridCommonAbstrac
 
         final AtomicInteger threadIdx = new AtomicInteger(0);
 
-        final int THREADS = CLIENT_CNT * 3;
+        final int THREADS = CLIENT_CNT * 1;
 
         final ConcurrentHashSet<Integer> putKeys = new ConcurrentHashSet<>();
 
@@ -1834,6 +1834,7 @@ public class IgniteCacheClientNodeChangingTopologyTest extends GridCommonAbstrac
                                     }
                                 }
                                 else
+                                    //cache.put(map.keySet().iterator().next(), map.values().iterator().next());
                                     cache.putAll(map);
 
                                 putKeys.addAll(map.keySet());

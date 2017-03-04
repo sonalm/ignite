@@ -216,13 +216,13 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
             if (fut != null && !fut.isDone()) {
                 fut.listen(new CI1<IgniteInternalFuture<?>>() {
                     @Override public void apply(IgniteInternalFuture<?> t) {
-                        cctx.kernalContext().closure().runLocalSafe(new Runnable() {
+                        Runnable c = new Runnable() {
                             @Override public void run() {
                                 IgniteLogger log = cacheMsg.messageLogger(cctx);
 
                                 if (log.isDebugEnabled()) {
                                     StringBuilder msg0 = new StringBuilder("Process cache message after wait for " +
-                                        "affinity topology version [");
+                                            "affinity topology version [");
 
                                     appendMessageInfo(cacheMsg, nodeId, msg0).append(']');
 
@@ -231,7 +231,12 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
 
                                 handleMessage(nodeId, cacheMsg);
                             }
-                        });
+                        };
+
+                        if (((GridCacheMessage)msg).partition() >= 0)
+                            cctx.kernalContext().getStripedExecutorService().execute(((GridCacheMessage) msg).partition(), c);
+                        else
+                            cctx.kernalContext().closure().runLocalSafe(c);
                     }
                 });
 

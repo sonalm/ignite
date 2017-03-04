@@ -120,11 +120,6 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
         }
     }
 
-    /** {@inheritDoc} */
-    @Override protected void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err) {
-
-    }
-
     /**
      * @param ttl TTL.
      * @param conflictExpireTime Conflict expire time.

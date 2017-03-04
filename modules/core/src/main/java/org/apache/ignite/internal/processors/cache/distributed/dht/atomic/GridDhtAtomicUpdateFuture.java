@@ -103,11 +103,6 @@ class GridDhtAtomicUpdateFuture extends GridDhtAtomicAbstractUpdateFuture {
     }
 
     /** {@inheritDoc} */
-    @Override protected void addFailedKeys(GridNearAtomicUpdateResponse updateRes, Throwable err) {
-
-    }
-
-    /** {@inheritDoc} */
     @Override public String toString() {
         return S.toString(GridDhtAtomicUpdateFuture.class, this, "super", super.toString());
     }

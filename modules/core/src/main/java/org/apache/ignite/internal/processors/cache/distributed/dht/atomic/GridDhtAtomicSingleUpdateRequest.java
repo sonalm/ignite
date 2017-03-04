@@ -197,7 +197,11 @@ public class GridDhtAtomicSingleUpdateRequest extends GridDhtAtomicAbstractUpdat
 
     /** {@inheritDoc} */
     @Override public int partition() {
-        return key.partition();
+        int p = key.partition();
+
+        assert p >= 0;
+
+        return p;
     }
 
     /** {@inheritDoc} */

@@ -164,6 +164,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         boolean rcvAll = false;
 
+        List<GridNearAtomicCheckUpdateRequest> checkReqs = null;
+
         synchronized (mux) {
             if (futId == null)
                 return false;
@@ -173,6 +175,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     GridNearAtomicAbstractUpdateRequest req = singleReq.processPrimaryResponse(nodeId);
 
                     if (req != null) {
+                        rcvAll = true;
+
                         GridNearAtomicUpdateResponse res = primaryFailedResponse(req);
 
                         singleReq.onPrimaryResponse(res, cctx);
@@ -181,7 +185,12 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     }
                 }
                 else {
-                    singleReq.onDhtNodeLeft(nodeId);
+                    DhtLeftResult res = singleReq.onDhtNodeLeft(nodeId);
+
+                    if (res == DhtLeftResult.DONE)
+                        rcvAll = true;
+                    else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY)
+                        checkReqs = Collections.singletonList(new GridNearAtomicCheckUpdateRequest(singleReq.req));
                 }
 
                 if (rcvAll) {
@@ -215,7 +224,16 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                         }
                     }
                     else {
-                        reqState.onDhtNodeLeft(nodeId);
+                        DhtLeftResult res = reqState.onDhtNodeLeft(nodeId);
+
+                        if (res == DhtLeftResult.DONE)
+                            reqDone = true;
+                        else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY) {
+                            if (checkReqs == null)
+                                checkReqs = new ArrayList<>();
+
+                            checkReqs.add(new GridNearAtomicCheckUpdateRequest(reqState.req));
+                        }
                     }
 
                     if (reqDone) {
@@ -237,15 +255,16 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             }
         }
 
-        if (rcvAll)
+        if (checkReqs != null) {
+            assert !rcvAll;
+
+            for (int i = 0; i < checkReqs.size(); i++)
+                sendCheckUpdateRequest(checkReqs.get(i));
+        }
+        else if (rcvAll)
             finishUpdateFuture(opRes0, err0, remapTopVer0);
 
         return false;
-    }
-
-    /** {@inheritDoc} */
-    @Override public IgniteInternalFuture<Void> completeFuture(AffinityTopologyVersion topVer) {
-        return null;
     }
 
     /** {@inheritDoc} */
@@ -824,25 +843,33 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
         CachePartialUpdateCheckedException err0 = null;
         AffinityTopologyVersion remapTopVer0 = null;
 
+        List<GridNearAtomicCheckUpdateRequest> checkReqs = null;
+
+        boolean rcvAll = false;
+
         synchronized (mux) {
             if (this.futId == null || !this.futId.equals(futId))
                 return false;
 
             if (singleReq != null) {
-                if (singleReq.checkDhtNodes(cctx)) {
+                DhtLeftResult res = singleReq.checkDhtNodes(cctx);
+
+                if (res == DhtLeftResult.DONE) {
                     opRes0 = opRes;
                     err0 = err;
                     remapTopVer0 = onAllReceived();
                 }
+                else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY)
+                    checkReqs = Collections.singletonList(new GridNearAtomicCheckUpdateRequest(singleReq.req));
                 else
                     return true;
             }
             else {
                 if (mappings != null) {
-                    boolean rcvAll = false;
-
                     for (PrimaryRequestState reqState : mappings.values()) {
-                        if (reqState.checkDhtNodes(cctx)) {
+                        DhtLeftResult res = reqState.checkDhtNodes(cctx);
+
+                        if (res == DhtLeftResult.DONE) {
                             assert mappings.size() > resCnt : "[mappings=" + mappings.size() + ", cnt=" + resCnt + ']';
 
                             resCnt++;
@@ -857,19 +884,34 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                                 break;
                             }
                         }
-                    }
+                        else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY) {
+                            if (checkReqs == null)
+                                checkReqs = new ArrayList<>(mappings.size());
 
-                    if (!rcvAll)
-                        return true;
+                            checkReqs.add(new GridNearAtomicCheckUpdateRequest(reqState.req));
+                        }
+                    }
                 }
                 else
                     return true;
             }
         }
 
-        finishUpdateFuture(opRes0, err0, remapTopVer0);
+        if (checkReqs != null) {
+            assert !rcvAll;
 
-        return false;
+            for (int i = 0; i < checkReqs.size(); i++)
+                sendCheckUpdateRequest(checkReqs.get(i));
+
+            return false;
+        }
+        else if (rcvAll) {
+            finishUpdateFuture(opRes0, err0, remapTopVer0);
+
+            return false;
+        }
+
+        return true;
     }
 
     /**

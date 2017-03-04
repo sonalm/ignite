@@ -783,7 +783,9 @@ public class GridDhtPartitionsExchangeFuture extends GridFutureAdapter<AffinityT
             catch (IgniteFutureTimeoutCheckedException ignored) {
                 // Print pending transactions and locks that might have led to hang.
                 if (dumpedObjects < DUMP_PENDING_OBJECTS_THRESHOLD) {
-                    dumpPendingObjects();
+                    synchronized (getClass()) {
+                        dumpPendingObjects();
+                    }
 
                     dumpedObjects++;
                 }

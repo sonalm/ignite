@@ -17,8 +17,6 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -164,11 +162,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 if (res == DhtLeftResult.DONE)
                     rcvAll = true;
-                else if (res == DhtLeftResult.ALL_RCVD_CHECK_UPDATE) {
-                    checkReq = new GridNearAtomicCheckUpdateRequest(cctx.cacheId(),
-                        reqState.req,
-                        reqState.req.partition(),
-                        futId);
+                else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY) {
+                    checkReq = new GridNearAtomicCheckUpdateRequest(reqState.req);
                 }
                 else
                     return false;
@@ -187,11 +182,6 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
             finishUpdateFuture(opRes0, err0, remapTopVer0);
 
         return false;
-    }
-
-    /** {@inheritDoc} */
-    @Override public IgniteInternalFuture<Void> completeFuture(AffinityTopologyVersion topVer) {
-        return null;
     }
 
     /** {@inheritDoc} */
@@ -529,9 +519,11 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
      * @return
      */
     private boolean checkDhtNodes(Long futId) {
-        GridCacheReturn opRes0;
-        CachePartialUpdateCheckedException err0;
-        AffinityTopologyVersion remapTopVer0;
+        GridCacheReturn opRes0 = null;
+        CachePartialUpdateCheckedException err0 = null;
+        AffinityTopologyVersion remapTopVer0 = null;
+
+        GridNearAtomicCheckUpdateRequest checkReq = null;
 
         synchronized (mux) {
             if (this.futId == null || !this.futId.equals(futId))
@@ -539,16 +531,24 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
             assert reqState != null;
 
-            if (reqState.checkDhtNodes(cctx)) {
+            DhtLeftResult res = reqState.checkDhtNodes(cctx);
+
+            if (res == DhtLeftResult.DONE) {
                 opRes0 = opRes;
                 err0 = err;
                 remapTopVer0 = onAllReceived();
+            }
+            else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY){
+                checkReq = new GridNearAtomicCheckUpdateRequest(reqState.req);
             }
             else
                 return true;
         }
 
-        finishUpdateFuture(opRes0, err0, remapTopVer0);
+        if (checkReq != null)
+            sendCheckUpdateRequest(checkReq);
+        else
+            finishUpdateFuture(opRes0, err0, remapTopVer0);
 
         return false;
     }
