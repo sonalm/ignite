@@ -44,6 +44,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
 import org.apache.ignite.internal.util.tostring.GridToStringInclude;
+import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
@@ -404,10 +405,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
         /** */
         @GridToStringInclude
-        private Set<UUID> dhtNodes;
+        Set<UUID> dhtNodes;
 
         @GridToStringInclude
-        private List<UUID> dhtNodes0;
+        private Set<UUID> dhtNodes0;
 
         /** */
         @GridToStringInclude
@@ -425,7 +426,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             this.req = req;
 
             if (req.initMappingLocally()) {
-                dhtNodes0 = new ArrayList<>();
+                dhtNodes0 = new HashSet<>();
 
                 for (ClusterNode n : nodes)
                     dhtNodes0.add(n.id());
@@ -594,10 +595,15 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         private void initDhtNodes(List<UUID> nodeIds, GridCacheContext cctx) {
             assert dhtNodes == null || req.initMappingLocally();
 
+            Set<UUID> dhtNodes0 = dhtNodes;
+
             dhtNodes = null;
 
             for (UUID dhtNodeId : nodeIds) {
-                if ((rcvd != null && rcvd.contains(dhtNodeId)))
+                if (F.contains(rcvd, dhtNodeId))
+                    continue;
+
+                if (req.needPrimaryResponse() && !F.contains(dhtNodes0, dhtNodeId))
                     continue;
 
                 if (cctx.discovery().node(dhtNodeId) != null) {

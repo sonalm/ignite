@@ -545,7 +545,24 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      * @throws Exception If failed.
      */
     public void testInvokeAll() throws Exception {
-        // TODO IGNITE-4705 (some keys updated, some not).
+        final int SRVS = 2;
+
+        startGrids(SRVS);
+
+        client = true;
+
+        Ignite clientNode = startGrid(SRVS);
+
+        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
+
+        List<Integer> keys = primaryKeys(grid(0).cache(TEST_CACHE), 2);
+
+        Map<Integer, SetValueEntryProcessor> map = new HashMap<>();
+
+        map.put(keys.get(0), new SetValueEntryProcessor(1));
+        map.put(keys.get(1), new SetValueEntryProcessor(null));
+
+        nearCache.invokeAll(map);
     }
 
     /**

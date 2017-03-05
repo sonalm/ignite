@@ -705,6 +705,12 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             }
             else {
                 try {
+                    if (req.initMappingLocally() && reqState.dhtNodes.isEmpty()) {
+                        reqState.dhtNodes = null;
+
+                        req.needPrimaryResponse(false);
+                    }
+
                     cctx.io().send(req.nodeId(), req, cctx.ioPolicy());
 
                     if (msgLog.isDebugEnabled()) {
@@ -852,6 +858,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 return false;
 
             if (singleReq != null) {
+                if (!singleReq.req.initMappingLocally())
+                    return true;
+
                 DhtLeftResult res = singleReq.checkDhtNodes(cctx);
 
                 if (res == DhtLeftResult.DONE) {
@@ -867,6 +876,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             else {
                 if (mappings != null) {
                     for (PrimaryRequestState reqState : mappings.values()) {
+                        if (!reqState.req.initMappingLocally())
+                            continue;
+
                         DhtLeftResult res = reqState.checkDhtNodes(cctx);
 
                         if (res == DhtLeftResult.DONE) {
@@ -1021,6 +1033,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
             ClusterNode primary = nodes.get(0);
 
+            if (primary.isLocal())
+                mappingKnown = false;
+
             UUID nodeId = primary.id();
 
             PrimaryRequestState mapped = pendingMappings.get(nodeId);
@@ -1126,6 +1141,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     "(all partition nodes left the grid).");
 
         ClusterNode primary = nodes.get(0);
+
+        if (primary.isLocal() || nodes.size() == 1)
+            mappingKnown = false;
 
         GridNearAtomicFullUpdateRequest req = new GridNearAtomicFullUpdateRequest(
             cctx.cacheId(),
