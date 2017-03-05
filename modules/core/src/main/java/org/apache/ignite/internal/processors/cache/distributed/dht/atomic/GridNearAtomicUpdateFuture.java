@@ -770,10 +770,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         int size = keys.size();
 
-        try {
-            boolean mappingKnown = cctx.topology().rebalanceFinished(topVer) &&
+        boolean mappingKnown = cctx.topology().rebalanceFinished(topVer) &&
                 !cctx.discovery().hasNearCache(cctx.cacheId(), topVer);
-
+        try {
             if (size == 1) {
                 assert remapKeys == null || remapKeys.size() == 1;
 
@@ -815,11 +814,6 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
                 return;
             }
-
-            if (mappingKnown && syncMode == FULL_SYNC && cctx.discovery().topologyVersion() != topVer.topologyVersion()) {
-                if (!checkDhtNodes(futId))
-                    return;
-            }
         }
         catch (Exception e) {
             err = e;
@@ -842,6 +836,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             else
                 doUpdate(mappings0);
         }
+
+        if (mappingKnown && syncMode == FULL_SYNC && cctx.discovery().topologyVersion() != topVer.topologyVersion())
+            checkDhtNodes(futId);
     }
 
     private boolean checkDhtNodes(Long futId) {

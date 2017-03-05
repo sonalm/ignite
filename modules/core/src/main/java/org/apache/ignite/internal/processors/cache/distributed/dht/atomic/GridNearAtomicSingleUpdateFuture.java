@@ -494,11 +494,6 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 return;
             }
-
-            if (reqState.req.initMappingLocally() && (cctx.discovery().topologyVersion() != topVer.topologyVersion())) {
-                if (!checkDhtNodes(futId))
-                    return;
-            }
         }
         catch (Exception e) {
             err = e;
@@ -512,6 +507,9 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         // Optimize mapping for single key.
         mapSingle(reqState0.req.nodeId(), reqState0.req);
+
+        if (reqState0.req.initMappingLocally() && (cctx.discovery().topologyVersion() != topVer.topologyVersion()))
+            checkDhtNodes(futId);
     }
 
     /**
