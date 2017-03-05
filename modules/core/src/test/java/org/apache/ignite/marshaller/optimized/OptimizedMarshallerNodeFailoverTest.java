@@ -78,8 +78,6 @@ public class OptimizedMarshallerNodeFailoverTest extends GridCommonAbstractTest 
         else
             cfg.setClientMode(true);
 
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
-
         return cfg;
     }
 

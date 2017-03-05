@@ -101,7 +101,6 @@ public class GridCacheAtomicInvalidPartitionHandlingSelfTest extends GridCommonA
         DelayCommunicationSpi spi = new DelayCommunicationSpi();
 
         spi.setSharedMemoryPort(-1);
-        spi.setIdleConnectionTimeout(500);
 
         cfg.setCommunicationSpi(spi);
 

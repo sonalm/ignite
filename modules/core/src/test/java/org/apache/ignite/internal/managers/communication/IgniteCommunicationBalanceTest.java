@@ -64,7 +64,6 @@ public class IgniteCommunicationBalanceTest extends GridCommonAbstractTest {
         commSpi.setSharedMemoryPort(-1);
         commSpi.setConnectionsPerNode(connectionsPerNode());
         commSpi.setUsePairedConnections(usePairedConnections());
-        commSpi.setIdleConnectionTimeout(500);
 
         if (selectors > 0)
             commSpi.setSelectorsCount(selectors);

@@ -100,8 +100,6 @@ public class GridCacheContinuousQueryConcurrentTest extends GridCommonAbstractTe
         if (gridName.endsWith(String.valueOf(NODES)))
             cfg.setClientMode(ThreadLocalRandom.current().nextBoolean());
 
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
-
         return cfg;
     }
 

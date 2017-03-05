@@ -130,8 +130,6 @@ public abstract class IgniteCacheEntryListenerAbstractTest extends IgniteCacheAb
 
         cfg.setEventStorageSpi(eventSpi);
 
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
-
         return cfg;
     }
 

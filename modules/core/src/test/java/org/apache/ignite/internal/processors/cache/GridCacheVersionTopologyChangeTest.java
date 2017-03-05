@@ -57,8 +57,6 @@ public class GridCacheVersionTopologyChangeTest extends GridCommonAbstractTest {
 
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
 
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
-
         return cfg;
     }
 

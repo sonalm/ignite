@@ -47,7 +47,6 @@ public abstract class IgniteCollectionAbstractTest extends GridCommonAbstractTes
         IgniteConfiguration cfg = super.getConfiguration(gridName);
 
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(500);
 
         TcpDiscoverySpi spi = new TcpDiscoverySpi();
 

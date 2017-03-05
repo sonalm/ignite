@@ -120,7 +120,6 @@ public abstract class IgniteCachePutRetryAbstractSelfTest extends GridCommonAbst
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(IP_FINDER);
 
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(100);
 
         AtomicConfiguration acfg = new AtomicConfiguration();
 

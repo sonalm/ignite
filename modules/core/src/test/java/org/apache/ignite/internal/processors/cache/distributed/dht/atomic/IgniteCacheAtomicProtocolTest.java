@@ -71,7 +71,6 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
 
         TestRecordingCommunicationSpi commSpi = new TestRecordingCommunicationSpi();
-        commSpi.setIdleConnectionTimeout(1000);
 
         cfg.setCommunicationSpi(commSpi);
 

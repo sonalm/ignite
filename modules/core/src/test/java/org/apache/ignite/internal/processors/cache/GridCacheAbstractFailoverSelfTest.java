@@ -87,7 +87,6 @@ public abstract class GridCacheAbstractFailoverSelfTest extends GridCacheAbstrac
         discoSpi.setReconnectCount(2);
 
         ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setSharedMemoryPort(-1);
-        ((TcpCommunicationSpi)cfg.getCommunicationSpi()).setIdleConnectionTimeout(100);
 
         return cfg;
     }
