@@ -182,17 +182,19 @@ public class IgniteCacheTestSuite extends TestSuite {
     public static TestSuite suite(Set<Class> ignoredTests) throws Exception {
         TestSuite suite = new TestSuite("IgniteCache Test Suite");
 
-        suite.addTestSuite(IgniteCacheEntryListenerAtomicTest.class);
-        suite.addTestSuite(IgniteCacheEntryListenerAtomicReplicatedTest.class);
-        suite.addTestSuite(IgniteCacheEntryListenerAtomicLocalTest.class);
+// TODO IGNITE-4705.
+//        suite.addTestSuite(IgniteCacheEntryListenerAtomicTest.class);
+//        suite.addTestSuite(IgniteCacheEntryListenerAtomicReplicatedTest.class);
+//        suite.addTestSuite(IgniteCacheEntryListenerAtomicLocalTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerTxTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerTxOffheapTieredTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerTxOffheapValuesTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerTxReplicatedTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerTxLocalTest.class);
         suite.addTestSuite(IgniteCacheEntryListenerEagerTtlDisabledTest.class);
-        suite.addTestSuite(IgniteCacheEntryListenerAtomicOffheapTieredTest.class);
-        suite.addTestSuite(IgniteCacheEntryListenerAtomicOffheapValuesTest.class);
+// TODO IGNITE-4705.
+//        suite.addTestSuite(IgniteCacheEntryListenerAtomicOffheapTieredTest.class);
+//        suite.addTestSuite(IgniteCacheEntryListenerAtomicOffheapValuesTest.class);
 
         suite.addTestSuite(IgniteClientAffinityAssignmentSelfTest.class);
 

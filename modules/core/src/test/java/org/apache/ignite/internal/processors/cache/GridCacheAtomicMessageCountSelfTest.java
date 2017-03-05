@@ -94,7 +94,7 @@ public class GridCacheAtomicMessageCountSelfTest extends GridCommonAbstractTest 
     /**
      * @throws Exception If failed.
      */
-    public void testPartitionedClock() throws Exception {
+    public void _testPartitionedClock() throws Exception {
         checkMessages(false, CLOCK);
     }
 
@@ -108,7 +108,7 @@ public class GridCacheAtomicMessageCountSelfTest extends GridCommonAbstractTest 
     /**
      * @throws Exception If failed.
      */
-    public void testClientClock() throws Exception {
+    public void _testClientClock() throws Exception {
         checkMessages(true, CLOCK);
     }
 
