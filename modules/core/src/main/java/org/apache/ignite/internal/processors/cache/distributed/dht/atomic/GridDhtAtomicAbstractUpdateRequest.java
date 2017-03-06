@@ -55,6 +55,9 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /** */
     static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
 
+    /** */
+    static final int DHT_ATOMIC_REPLY_WITHOUT_DELAY = 0x01;
+
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
@@ -141,10 +144,18 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         this.nearFutId = nearFutId;
     }
 
+    boolean replyWithoutDelay() {
+        return isFlag(DHT_ATOMIC_REPLY_WITHOUT_DELAY);
+    }
+
+    void replyWithoutDelay(boolean replyWithoutDelay) {
+        setFlag(replyWithoutDelay, DHT_ATOMIC_REPLY_WITHOUT_DELAY);
+    }
+
     /**
      * @param res Result flag.
      */
-    public void hasResult(boolean res) {
+    void hasResult(boolean res) {
         setFlag(res, DHT_ATOMIC_HAS_RESULT_MASK);
     }
 

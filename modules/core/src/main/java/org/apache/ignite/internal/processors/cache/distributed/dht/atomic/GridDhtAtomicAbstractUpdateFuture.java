@@ -419,6 +419,9 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
                         req.hasResult(true);
                 }
 
+                if (cntQryClsrs != null)
+                    req.replyWithoutDelay(true);
+
                 cctx.io().send(req.nodeId(), req, cctx.ioPolicy());
 
                 if (msgLog.isDebugEnabled()) {
