@@ -152,7 +152,7 @@ public class GridNearAtomicFullUpdateRequest extends GridNearAtomicAbstractUpdat
         @Nullable CacheEntryPredicate[] filter,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean mappingKnown,
+        boolean needPrimaryRes,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo,
@@ -168,7 +168,7 @@ public class GridNearAtomicFullUpdateRequest extends GridNearAtomicAbstractUpdat
             retval,
             subjId,
             taskNameHash,
-            mappingKnown,
+            needPrimaryRes,
             skipStore,
             keepBinary,
             addDepInfo);

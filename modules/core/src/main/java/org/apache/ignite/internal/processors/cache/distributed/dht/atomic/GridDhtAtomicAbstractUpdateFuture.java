@@ -375,7 +375,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             updateRes.nearVersion() != null ||
             cctx.localNodeId().equals(nearNode.id());
 
-        boolean needMapping = updateReq.fullSync() && (!updateReq.needPrimaryResponse() || !allUpdated());
+        boolean needMapping = updateReq.fullSync() && (updateReq.needPrimaryResponse() || !allUpdated());
 
         if (needMapping) {
             initMapping(updateRes);

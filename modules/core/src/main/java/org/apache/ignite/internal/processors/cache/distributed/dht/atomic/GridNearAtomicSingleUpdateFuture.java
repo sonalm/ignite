@@ -507,7 +507,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         }
 
         // Optimize mapping for single key.
-        processSingleRequest(reqState0.req.nodeId(), reqState0.req);
+        sendSingleRequest(reqState0.req.nodeId(), reqState0.req);
 
         if (syncMode == FULL_ASYNC) {
             onDone(new GridCacheReturn(cctx, true, true, null, true));
@@ -607,8 +607,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         ClusterNode primary = nodes.get(0);
 
-        if (primary.isLocal() || nodes.size() == 1)
-            mappingKnown = false;
+        boolean needPrimaryRes = !mappingKnown || primary.isLocal() || nodes.size() == 1;
 
         GridNearAtomicAbstractUpdateRequest req;
 
@@ -626,7 +625,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                     invokeArgs,
                     subjId,
                     taskNameHash,
-                    mappingKnown,
+                    needPrimaryRes,
                     skipStore,
                     keepBinary,
                     cctx.deploymentEnabled());
@@ -644,7 +643,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                         retval,
                         subjId,
                         taskNameHash,
-                        mappingKnown,
+                        needPrimaryRes,
                         skipStore,
                         keepBinary,
                         cctx.deploymentEnabled());
@@ -662,7 +661,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                         filter,
                         subjId,
                         taskNameHash,
-                        mappingKnown,
+                        needPrimaryRes,
                         skipStore,
                         keepBinary,
                         cctx.deploymentEnabled());
@@ -684,7 +683,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
                 filter,
                 subjId,
                 taskNameHash,
-                mappingKnown,
+                needPrimaryRes,
                 skipStore,
                 keepBinary,
                 cctx.deploymentEnabled(),

@@ -837,7 +837,15 @@ class GridDhtPartitionTopologyImpl implements GridDhtPartitionTopology {
         return nodes != null ? nodes : affNodes;
     }
 
+    /**
+     * @param p Partition.
+     * @param affAssignment Assignments.
+     * @param affNodes Node assigned for given partition by affinity.
+     * @return Nodes responsible for given partition (primary is first).
+     */
     @Nullable private List<ClusterNode> nodes0(int p, AffinityAssignment affAssignment, List<ClusterNode> affNodes) {
+        AffinityTopologyVersion topVer = affAssignment.topologyVersion();
+
         lock.readLock().lock();
 
         try {

@@ -101,7 +101,7 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
         @Nullable Object[] invokeArgs,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean mappingKnown,
+        boolean needPrimaryRes,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo
@@ -117,7 +117,7 @@ public class GridNearAtomicSingleUpdateInvokeRequest extends GridNearAtomicSingl
             retval,
             subjId,
             taskNameHash,
-            mappingKnown,
+            needPrimaryRes,
             skipStore,
             keepBinary,
             addDepInfo

@@ -688,7 +688,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
      *
      * @param mappings Mappings to send.
      */
-    private void doUpdate(Map<UUID, PrimaryRequestState> mappings) {
+    private void sendUpdateRequests(Map<UUID, PrimaryRequestState> mappings) {
         UUID locNodeId = cctx.localNodeId();
 
         GridNearAtomicAbstractUpdateRequest locUpdate = null;
@@ -708,7 +708,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     if (req.initMappingLocally() && reqState.dhtNodes.isEmpty()) {
                         reqState.dhtNodes = null;
 
-                        req.needPrimaryResponse(false);
+                        req.needPrimaryResponse(true);
                     }
 
                     cctx.io().send(req.nodeId(), req, cctx.ioPolicy());
@@ -830,7 +830,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         // Optimize mapping for single key.
         if (singleReq0 != null)
-            processSingleRequest(singleReq0.req.nodeId(), singleReq0.req);
+            sendSingleRequest(singleReq0.req.nodeId(), singleReq0.req);
         else {
             assert mappings0 != null;
 
@@ -840,7 +840,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 return;
             }
             else
-                doUpdate(mappings0);
+                sendUpdateRequests(mappings0);
         }
 
         if (syncMode == FULL_ASYNC) {
@@ -1042,8 +1042,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
             ClusterNode primary = nodes.get(0);
 
-            if (primary.isLocal())
-                mappingKnown = false;
+            boolean needPrimaryRes = !mappingKnown || primary.isLocal();
 
             UUID nodeId = primary.id();
 
@@ -1064,7 +1063,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     filter,
                     subjId,
                     taskNameHash,
-                    mappingKnown,
+                    needPrimaryRes,
                     skipStore,
                     keepBinary,
                     cctx.deploymentEnabled(),
@@ -1087,10 +1086,12 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
     /**
      * @param topVer Topology version.
      * @param futId Future ID.
+     * @param mappingKnown {@code True} if update mapping is known locally.
      * @return Request.
      * @throws Exception If failed.
      */
-    private PrimaryRequestState mapSingleUpdate(AffinityTopologyVersion topVer, Long futId, boolean mappingKnown) throws Exception {
+    private PrimaryRequestState mapSingleUpdate(AffinityTopologyVersion topVer, Long futId, boolean mappingKnown)
+        throws Exception {
         Object key = F.first(keys);
 
         Object val;
@@ -1151,8 +1152,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         ClusterNode primary = nodes.get(0);
 
-        if (primary.isLocal() || nodes.size() == 1)
-            mappingKnown = false;
+        boolean needPrimaryRes = !mappingKnown || primary.isLocal() || nodes.size() == 1;
 
         GridNearAtomicFullUpdateRequest req = new GridNearAtomicFullUpdateRequest(
             cctx.cacheId(),
@@ -1168,7 +1168,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             filter,
             subjId,
             taskNameHash,
-            mappingKnown,
+            needPrimaryRes,
             skipStore,
             keepBinary,
             cctx.deploymentEnabled(),

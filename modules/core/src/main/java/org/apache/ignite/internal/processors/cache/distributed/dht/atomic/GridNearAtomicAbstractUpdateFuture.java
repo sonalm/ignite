@@ -280,7 +280,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param nodeId Node ID.
      * @param req Request.
      */
-    final void processSingleRequest(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
+    final void sendSingleRequest(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
         if (cctx.localNodeId().equals(nodeId)) {
             cache.updateAllAsyncInternal(nodeId, req,
                 new GridDhtAtomicCache.UpdateReplyClosure() {
@@ -490,7 +490,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 return DhtLeftResult.DONE;
 
             if (dhtNodes.isEmpty())
-                return req.needPrimaryResponse() ? DhtLeftResult.ALL_RCVD_CHECK_PRIMARY : DhtLeftResult.NOT_DONE;
+                return !req.needPrimaryResponse() ? DhtLeftResult.ALL_RCVD_CHECK_PRIMARY : DhtLeftResult.NOT_DONE;
 
             return DhtLeftResult.NOT_DONE;
         }
@@ -531,7 +531,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 if (hasRes)
                     return DhtLeftResult.DONE;
                 else
-                    return req.needPrimaryResponse() ? DhtLeftResult.ALL_RCVD_CHECK_PRIMARY : DhtLeftResult.NOT_DONE;
+                    return !req.needPrimaryResponse() ? DhtLeftResult.ALL_RCVD_CHECK_PRIMARY : DhtLeftResult.NOT_DONE;
             }
 
             return DhtLeftResult.NOT_DONE;
@@ -603,7 +603,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 if (F.contains(rcvd, dhtNodeId))
                     continue;
 
-                if (req.needPrimaryResponse() && !F.contains(dhtNodes0, dhtNodeId))
+                if (req.initMappingLocally() && !F.contains(dhtNodes0, dhtNodeId))
                     continue;
 
                 if (cctx.discovery().node(dhtNodeId) != null) {
@@ -622,7 +622,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         @Override public String toString() {
             return S.toString(PrimaryRequestState.class, this,
                 "primary", primaryId(),
-                "mapppingKnown", req.needPrimaryResponse(),
+                "needPrimaryRes", req.needPrimaryResponse(),
                 "primaryRes", req.response() != null,
                 "done", finished());
         }

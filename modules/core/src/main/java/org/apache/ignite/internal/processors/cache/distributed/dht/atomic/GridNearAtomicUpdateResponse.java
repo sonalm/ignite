@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.internal.GridDirectCollection;
@@ -40,7 +39,6 @@ import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.GridLongList;
 import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.S;
-import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
@@ -128,11 +126,17 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
         return CACHE_MSG_IDX;
     }
 
+    /**
+     * @param dhtNodes DHT nodes.
+     */
     public void dhtNodes(List<UUID> dhtNodes) {
         this.dhtNodes = dhtNodes;
     }
 
-    public List<UUID> dhtNodes() {
+    /**
+     * @return DHT nodes.
+     */
+    @Nullable public List<UUID> dhtNodes() {
         return dhtNodes;
     }
 
@@ -206,14 +210,14 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /**
      * @param remapTopVer Topology version to remap update.
      */
-    public void remapTopologyVersion(AffinityTopologyVersion remapTopVer) {
+    void remapTopologyVersion(AffinityTopologyVersion remapTopVer) {
         this.remapTopVer = remapTopVer;
     }
 
     /**
      * @return Topology version if update should be remapped.
      */
-    @Nullable public AffinityTopologyVersion remapTopologyVersion() {
+    @Nullable AffinityTopologyVersion remapTopologyVersion() {
         return remapTopVer;
     }
 
@@ -246,7 +250,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param expireTime Expire time for near cache update.
      */
     @SuppressWarnings("ForLoopReplaceableByForEach")
-    public void addNearTtl(int keyIdx, long ttl, long expireTime) {
+    void addNearTtl(int keyIdx, long ttl, long expireTime) {
         if (ttl >= 0) {
             if (nearTtls == null) {
                 nearTtls = new GridLongList(16);
@@ -303,7 +307,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /**
      * @param nearVer Version generated on primary node to be used for originating node's near cache update.
      */
-    public void nearVersion(GridCacheVersion nearVer) {
+    void nearVersion(GridCacheVersion nearVer) {
         this.nearVer = nearVer;
     }
 
@@ -317,7 +321,7 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     /**
      * @param keyIdx Index of key for which update was skipped
      */
-    public void addSkippedIndex(int keyIdx) {
+    void addSkippedIndex(int keyIdx) {
         if (nearSkipIdxs == null)
             nearSkipIdxs = new ArrayList<>();
 

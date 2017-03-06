@@ -162,14 +162,20 @@ public interface GridDhtPartitionTopology {
      */
     public long updateSequence();
 
-    @Nullable List<ClusterNode> nodes(int p, AffinityAssignment affAssignment, List<ClusterNode> affNodes);
-
     /**
      * @param p Partition ID.
      * @param topVer Topology version.
      * @return Collection of all nodes responsible for this partition with primary node being first.
      */
     public List<ClusterNode> nodes(int p, AffinityTopologyVersion topVer);
+
+    /**
+     * @param p Partition ID.
+     * @param affAssignment Assignments.
+     * @param affNodes Node assigned for given partition by affinity.
+     * @return Collection of all nodes responsible for this partition with primary node being first.
+     */
+    @Nullable public List<ClusterNode> nodes(int p, AffinityAssignment affAssignment, List<ClusterNode> affNodes);
 
     /**
      * @param p Partition ID.

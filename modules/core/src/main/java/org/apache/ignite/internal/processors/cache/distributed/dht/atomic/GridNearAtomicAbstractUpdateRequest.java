@@ -125,7 +125,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         boolean retval,
         @Nullable UUID subjId,
         int taskNameHash,
-        boolean mappingKnown,
+        boolean needPrimaryRes,
         boolean skipStore,
         boolean keepBinary,
         boolean addDepInfo
@@ -140,7 +140,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         this.taskNameHash = taskNameHash;
         this.addDepInfo = addDepInfo;
 
-        if (mappingKnown)
+        if (needPrimaryRes)
             needPrimaryResponse(true);
 
         if (topLocked)
@@ -176,48 +176,74 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return ctx.atomicMessageLogger();
     }
 
+    /**
+     * @return {@code True} if near node is able to initialize update mapping locally.
+     */
     boolean initMappingLocally() {
-        return needPrimaryResponse() && fullSync();
+        return !needPrimaryResponse() && fullSync();
     }
 
+    /**
+     * @return {@code True} if near node waits for primary response.
+     */
     boolean needPrimaryResponse() {
         return isFlag(NEED_PRIMARY_RES_FLAG_MASK);
     }
 
+    /**
+     * @param needRes {@code True} if near node waits for primary response.
+     */
+    void needPrimaryResponse(boolean needRes) {
+        setFlag(needRes, NEED_PRIMARY_RES_FLAG_MASK);
+    }
+
+    /**
+     * @return {@code True} if update is processed in {@link CacheWriteSynchronizationMode#FULL_SYNC} mode.
+     */
     boolean fullSync() {
         assert syncMode != null;
 
         return syncMode == CacheWriteSynchronizationMode.FULL_SYNC;
     }
 
-    void needPrimaryResponse(boolean stableTop) {
-        setFlag(stableTop, NEED_PRIMARY_RES_FLAG_MASK);
-    }
-
+    /**
+     * @return Task name hash code.
+     */
     public int taskNameHash() {
         return taskNameHash;
     }
 
+    /**
+     * @return Update opreation.
+     */
     public GridCacheOperation operation() {
         return op;
     }
 
+    /**
+     * @return Subject ID.
+     */
     public UUID subjectId() {
         return subjId;
     }
 
+    /**
+     * @return Target node ID.
+     */
     public UUID nodeId() {
         return nodeId;
     }
 
-    void nodeId(UUID nodeId) {
-        this.nodeId = nodeId;
-    }
-
+    /**
+     * @return Near node future ID.
+     */
     public long futureId() {
         return futId;
     }
 
+    /**
+     * @return Write synchronization mode.
+     */
     public final CacheWriteSynchronizationMode writeSynchronizationMode() {
         return syncMode;
     }
@@ -246,14 +272,14 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     /**
      * @return Topology locked flag.
      */
-    public final boolean topologyLocked() {
+    final boolean topologyLocked() {
         return isFlag(TOP_LOCKED_FLAG_MASK);
     }
 
     /**
-     * Sets topologyLocked flag value.
+     * @param val {@code True} if topology is locked on near node.
      */
-    public final void topologyLocked(boolean val) {
+    final void topologyLocked(boolean val) {
         setFlag(val, TOP_LOCKED_FLAG_MASK);
     }
 
@@ -265,7 +291,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     }
 
     /**
-     * Sets returnValue flag value.
+     * @param val Return value flag.
      */
     public final void returnValue(boolean val) {
         setFlag(val, RET_VAL_FLAG_MASK);
@@ -279,7 +305,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     }
 
     /**
-     * Sets skipStore flag value.
+     * @param val Skip store flag.
      */
     public void skipStore(boolean val) {
         setFlag(val, SKIP_STORE_FLAG_MASK);
@@ -293,7 +319,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     }
 
     /**
-     * Sets keepBinary flag value.
+     * @param val Keep binary flag.
      */
     public void keepBinary(boolean val) {
         setFlag(val, KEEP_BINARY_FLAG_MASK);
