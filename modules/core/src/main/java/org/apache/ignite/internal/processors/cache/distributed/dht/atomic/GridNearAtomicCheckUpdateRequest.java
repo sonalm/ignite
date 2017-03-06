@@ -35,6 +35,7 @@ public class GridNearAtomicCheckUpdateRequest extends GridCacheMessage {
     /** Cache message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
 
+    /** */
     @GridDirectTransient
     private GridNearAtomicAbstractUpdateRequest updateReq;
 
@@ -51,19 +52,30 @@ public class GridNearAtomicCheckUpdateRequest extends GridCacheMessage {
         // No-op.
     }
 
+    /**
+     * @param updateReq Related update request.
+     */
     GridNearAtomicCheckUpdateRequest(GridNearAtomicAbstractUpdateRequest updateReq) {
-        assert updateReq != null;
+        assert updateReq != null && updateReq.fullSync() : updateReq;
 
         this.updateReq = updateReq;
         this.cacheId = updateReq.cacheId();
         this.partId = updateReq.partition();
         this.futId = updateReq.futureId();
+
+        assert partId >= 0;
     }
 
+    /**
+     * @return Future ID on near node.
+     */
     long futureId() {
         return futId;
     }
 
+    /**
+     * @return Related update request.
+     */
     GridNearAtomicAbstractUpdateRequest updateRequest() {
         return updateReq;
     }

@@ -3085,16 +3085,13 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             checkReq.futureId(),
             false);
 
+        res.partition(checkReq.partition());
+
         GridCacheReturn ret = new GridCacheReturn(false, true);
 
         res.returnValue(ret);
 
-        try {
-            ctx.io().send(nodeId, res, ctx.ioPolicy());
-        }
-        catch (IgniteCheckedException e) {
-            e.printStackTrace();
-        }
+        sendNearUpdateReply(nodeId, res);
     }
 
     /**
