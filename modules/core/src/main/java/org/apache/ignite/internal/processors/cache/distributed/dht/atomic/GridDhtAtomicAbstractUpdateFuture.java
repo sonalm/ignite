@@ -146,14 +146,19 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
 
     /**
      * @param clsr Continuous query closure.
+     * @param sync Synchronous continuous query flag.
      */
-    public final void addContinuousQueryClosure(CI1<Boolean> clsr) {
+    public final void addContinuousQueryClosure(CI1<Boolean> clsr, boolean sync) {
         assert !isDone() : this;
 
-        if (cntQryClsrs == null)
-            cntQryClsrs = new ArrayList<>(10);
+        if (sync)
+            clsr.apply(true);
+        else {
+            if (cntQryClsrs == null)
+                cntQryClsrs = new ArrayList<>(10);
 
-        cntQryClsrs.add(clsr);
+            cntQryClsrs.add(clsr);
+        }
     }
 
     /**
