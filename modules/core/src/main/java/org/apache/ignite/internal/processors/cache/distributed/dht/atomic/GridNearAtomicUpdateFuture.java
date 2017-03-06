@@ -534,6 +534,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
      * @return Non null topology version if update should be remapped.
      */
     @Nullable private AffinityTopologyVersion onAllReceived() {
+        assert futId != null;
+
         AffinityTopologyVersion remapTopVer0 = null;
 
         if (remapKeys != null) {
@@ -854,7 +856,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             checkDhtNodes(futId);
     }
 
-    private boolean checkDhtNodes(Long futId) {
+    private void checkDhtNodes(Long futId) {
         GridCacheReturn opRes0 = null;
         CachePartialUpdateCheckedException err0 = null;
         AffinityTopologyVersion remapTopVer0 = null;
@@ -865,11 +867,11 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         synchronized (mux) {
             if (this.futId == null || !this.futId.equals(futId))
-                return false;
+                return;
 
             if (singleReq != null) {
                 if (!singleReq.req.initMappingLocally())
-                    return true;
+                    return;
 
                 DhtLeftResult res = singleReq.checkDhtNodes(cctx);
 
@@ -881,7 +883,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY)
                     checkReqs = Collections.singletonList(new GridNearAtomicCheckUpdateRequest(singleReq.req));
                 else
-                    return true;
+                    return;
             }
             else {
                 if (mappings != null) {
@@ -915,7 +917,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     }
                 }
                 else
-                    return true;
+                    return;
             }
         }
 
@@ -924,16 +926,9 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
             for (int i = 0; i < checkReqs.size(); i++)
                 sendCheckUpdateRequest(checkReqs.get(i));
-
-            return false;
         }
-        else if (rcvAll) {
+        else if (rcvAll)
             finishUpdateFuture(opRes0, err0, remapTopVer0);
-
-            return false;
-        }
-
-        return true;
     }
 
     /**

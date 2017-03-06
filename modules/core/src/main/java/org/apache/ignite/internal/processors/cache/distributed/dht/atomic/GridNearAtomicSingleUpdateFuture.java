@@ -163,9 +163,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
                 if (res == DhtLeftResult.DONE)
                     rcvAll = true;
-                else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY) {
+                else if (res == DhtLeftResult.ALL_RCVD_CHECK_PRIMARY)
                     checkReq = new GridNearAtomicCheckUpdateRequest(reqState.req);
-                }
                 else
                     return false;
             }
@@ -329,6 +328,8 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
     }
 
     private AffinityTopologyVersion onAllReceived() {
+        assert futId != null;
+
         AffinityTopologyVersion remapTopVer0 = null;
 
         if (remapTopVer == null) {
@@ -706,16 +707,16 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
     private void finishUpdateFuture(GridCacheReturn opRes,
         CachePartialUpdateCheckedException err,
         @Nullable AffinityTopologyVersion remapTopVer) {
-        if (nearEnabled) {
-            assert reqState.req.response() != null;
-
-            updateNear(reqState.req, reqState.req.response());
-        }
-
         if (remapTopVer != null) {
             waitAndRemap(remapTopVer);
 
             return;
+        }
+
+        if (nearEnabled) {
+            assert reqState.req.response() != null;
+
+            updateNear(reqState.req, reqState.req.response());
         }
 
         onDone(opRes, err);

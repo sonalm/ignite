@@ -470,6 +470,13 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
+    public void testPutAllRemapAndPrimaryFailed() throws Exception {
+        // TODO IGNITE-4705.
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
     public void testPutNearNodeFailure() throws Exception {
         startGrids(2);
 
