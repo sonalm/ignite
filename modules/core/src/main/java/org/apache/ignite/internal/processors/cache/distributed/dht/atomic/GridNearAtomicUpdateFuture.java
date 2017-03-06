@@ -774,7 +774,8 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
         int size = keys.size();
 
         boolean mappingKnown = cctx.topology().rebalanceFinished(topVer) &&
-                !cctx.discovery().hasNearCache(cctx.cacheId(), topVer);
+            !cctx.discovery().hasNearCache(cctx.cacheId(), topVer);
+
         try {
             if (size == 1) {
                 assert remapKeys == null || remapKeys.size() == 1;

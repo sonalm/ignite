@@ -327,8 +327,7 @@ public class IgniteCacheTestSuite4 extends TestSuite {
         suite.addTestSuite(IgniteCacheLoadRebalanceEvictionSelfTest.class);
         suite.addTestSuite(IgniteCachePrimarySyncTest.class);
         suite.addTestSuite(IgniteTxCachePrimarySyncTest.class);
-        // TODO 4705.
-        //suite.addTestSuite(IgniteTxCacheWriteSynchronizationModesMultithreadedTest.class);
+        suite.addTestSuite(IgniteTxCacheWriteSynchronizationModesMultithreadedTest.class);
         suite.addTestSuite(CachePutIfAbsentTest.class);
 
         suite.addTestSuite(MarshallerCacheJobRunNodeRestartTest.class);

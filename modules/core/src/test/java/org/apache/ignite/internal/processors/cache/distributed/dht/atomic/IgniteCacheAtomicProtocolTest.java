@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import javax.cache.processor.MutableEntry;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.cache.CacheEntryProcessor;
@@ -31,20 +32,25 @@ import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.IgniteKernal;
 import org.apache.ignite.internal.TestRecordingCommunicationSpi;
+import org.apache.ignite.internal.managers.communication.GridIoMessage;
+import org.apache.ignite.internal.processors.cache.GridCacheMessage;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionSupplyMessage;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionSupplyMessageV2;
 import org.apache.ignite.internal.util.lang.GridAbsPredicate;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.G;
+import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteFuture;
+import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.TcpDiscoveryIpFinder;
 import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
 import org.apache.ignite.testframework.GridTestUtils;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
 
-import javax.cache.processor.MutableEntry;
-
 import static org.apache.ignite.cache.CacheAtomicityMode.ATOMIC;
+import static org.apache.ignite.cache.CacheRebalanceMode.ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC;
@@ -62,6 +68,12 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /** */
     private boolean client;
 
+    /** */
+    private CacheConfiguration ccfg;
+
+    /** */
+    private boolean blockRebalance;
+
     /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
         IgniteConfiguration cfg = super.getConfiguration(gridName);
@@ -76,7 +88,26 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
         cfg.setClientMode(client);
 
+        if (ccfg != null)
+            cfg.setCacheConfiguration(ccfg);
+
         return cfg;
+    }
+
+    /**
+     *
+     */
+    private void blockRebalance() {
+        for (Ignite node : G.allGrids()) {
+            testSpi(node).blockMessages(new IgnitePredicate<GridIoMessage>() {
+                @Override public boolean apply(GridIoMessage msg) {
+                    Object msg0 = msg.message();
+
+                    return (msg0 instanceof GridDhtPartitionSupplyMessage || msg0 instanceof GridDhtPartitionSupplyMessageV2)
+                        && ((GridCacheMessage)msg0).cacheId() == CU.cacheId(TEST_CACHE);
+                }
+            });
+        }
     }
 
     /** {@inheritDoc} */
@@ -96,7 +127,25 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
+    public void testPutAllPrimaryFailure1_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
+        putAllPrimaryFailure(true, false);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
     public void testPutAllPrimaryFailure2() throws Exception {
+        putAllPrimaryFailure(true, true);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutAllPrimaryFailure2_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
         putAllPrimaryFailure(true, true);
     }
 
@@ -106,16 +155,19 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      * @throws Exception If failed.
      */
     private void putAllPrimaryFailure(boolean fail0, boolean fail1) throws Exception {
-        startGrids(4);
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
+        startServers(4);
 
         client = true;
 
         Ignite client = startGrid(4);
 
-        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearCache = client.cache(TEST_CACHE);
         IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
 
-        awaitPartitionMapExchange();
+        if (!blockRebalance)
+            awaitPartitionMapExchange();
 
         Ignite srv0 = ignite(0);
         Ignite srv1 = ignite(1);
@@ -129,10 +181,15 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
         assertEquals(2, map.size());
 
-        if (fail0)
+        if (fail0) {
             testSpi(client).blockMessages(GridNearAtomicFullUpdateRequest.class, srv0.name());
-        if (fail1)
+            testSpi(client).blockMessages(GridNearAtomicCheckUpdateRequest.class, srv0.name());
+        }
+
+        if (fail1) {
             testSpi(client).blockMessages(GridNearAtomicFullUpdateRequest.class, srv1.name());
+            testSpi(client).blockMessages(GridNearAtomicCheckUpdateRequest.class, srv1.name());
+        }
 
         log.info("Start put [key1=" + key1 + ", key2=" + key2 + ']');
 
@@ -146,6 +203,7 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
 
         if (fail0)
             stopGrid(0);
+
         if (fail1)
             stopGrid(1);
 
@@ -158,16 +216,35 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      * @throws Exception If failed.
      */
     public void testPutAllBackupFailure1() throws Exception {
-        startGrids(4);
+        putAllBackupFailure1();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutAllBackupFailure1_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
+        putAllBackupFailure1();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    private void putAllBackupFailure1() throws Exception {
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
+        startServers(4);
 
         client = true;
 
         Ignite client = startGrid(4);
 
-        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearCache = client.cache(TEST_CACHE);
         IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
 
-        awaitPartitionMapExchange();
+        if (!blockRebalance)
+            awaitPartitionMapExchange();
 
         Ignite srv0 = ignite(0);
 
@@ -203,16 +280,35 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      * @throws Exception If failed.
      */
     public void testPutBackupFailure1() throws Exception {
-        startGrids(4);
+        putBackupFailure1();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutBackupFailure1_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
+        putBackupFailure1();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    private void putBackupFailure1() throws Exception {
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
+        startServers(4);
 
         client = true;
 
         Ignite client = startGrid(4);
 
-        IgniteCache<Integer, Integer> nearCache = client.createCache(cacheConfiguration(1, FULL_SYNC));
+        IgniteCache<Integer, Integer> nearCache = client.cache(TEST_CACHE);
         IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
 
-        awaitPartitionMapExchange();
+        if (!blockRebalance)
+            awaitPartitionMapExchange();
 
         Ignite srv0 = ignite(0);
 
@@ -473,43 +569,51 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testReplace() throws Exception {
-        final int SRVS = 2;
-
-        startGrids(SRVS);
-
-        client = true;
-
-        Ignite clientNode = startGrid(SRVS);
-
-        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
-
-        awaitPartitionMapExchange();
-
-        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
-
-        nearCache.replace(key, 1);
+    public void testCacheOperations() throws Exception {
+        cacheOperations();
     }
 
     /**
      * @throws Exception If failed.
      */
-    public void testRemove() throws Exception {
+    public void testCacheOperations_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
+        cacheOperations();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    private void cacheOperations() throws Exception {
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
         final int SRVS = 2;
 
-        startGrids(SRVS);
+        startServers(SRVS);
 
         client = true;
 
         Ignite clientNode = startGrid(SRVS);
 
-        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
-
-        awaitPartitionMapExchange();
+        final IgniteCache<Integer, Integer> nearCache = clientNode.cache(TEST_CACHE);
 
         Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
 
+        nearCache.replace(key, 1);
+
         nearCache.remove(key);
+
+        nearCache.invoke(key, new SetValueEntryProcessor(null));
+
+        Map<Integer, SetValueEntryProcessor> map = new HashMap<>();
+
+        List<Integer> keys = primaryKeys(ignite(0).cache(TEST_CACHE), 2);
+
+        map.put(keys.get(0), new SetValueEntryProcessor(1));
+        map.put(keys.get(1), new SetValueEntryProcessor(null));
+
+        nearCache.invokeAll(map);
     }
 
     /**
@@ -517,51 +621,6 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      */
     public void testRemoveAll() throws Exception {
         // TODO IGNITE-4705 (some keys exist, some not).
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
-    public void testInvoke() throws Exception {
-        final int SRVS = 2;
-
-        startGrids(SRVS);
-
-        client = true;
-
-        Ignite clientNode = startGrid(SRVS);
-
-        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
-
-        awaitPartitionMapExchange();
-
-        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
-
-        nearCache.invoke(key, new SetValueEntryProcessor(null));
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
-    public void testInvokeAll() throws Exception {
-        final int SRVS = 2;
-
-        startGrids(SRVS);
-
-        client = true;
-
-        Ignite clientNode = startGrid(SRVS);
-
-        final IgniteCache<Integer, Integer> nearCache = clientNode.createCache(cacheConfiguration(1, FULL_SYNC));
-
-        List<Integer> keys = primaryKeys(grid(0).cache(TEST_CACHE), 2);
-
-        Map<Integer, SetValueEntryProcessor> map = new HashMap<>();
-
-        map.put(keys.get(0), new SetValueEntryProcessor(1));
-        map.put(keys.get(1), new SetValueEntryProcessor(null));
-
-        nearCache.invokeAll(map);
     }
 
     /**
@@ -624,8 +683,20 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         ccfg.setAtomicityMode(ATOMIC);
         ccfg.setWriteSynchronizationMode(writeSync);
         ccfg.setBackups(backups);
+        ccfg.setRebalanceMode(ASYNC);
 
         return ccfg;
+    }
+
+    private void startServers(int cnt) throws Exception {
+        startGrids(cnt - 1);
+
+        awaitPartitionMapExchange();
+
+        if (blockRebalance)
+            blockRebalance();
+
+        startGrid(cnt - 1);
     }
 
     /**

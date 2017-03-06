@@ -34,6 +34,8 @@ import org.apache.ignite.internal.processors.cache.GridCacheOperation;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
+import org.apache.ignite.internal.util.tostring.GridToStringExclude;
+import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.NotNull;
@@ -84,6 +86,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     protected int taskNameHash;
 
     /** Compressed boolean flags. */
+    @GridToStringExclude
     protected byte flags;
 
     /** */
@@ -587,5 +590,11 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         }
 
         return reader.afterMessageRead(GridNearAtomicAbstractUpdateRequest.class);
+    }
+
+    /** {@inheritDoc} */
+    @Override public String toString() {
+        return S.toString(GridNearAtomicAbstractUpdateRequest.class, this,
+            "flags", "needRes=" + isFlag(NEED_PRIMARY_RES_FLAG_MASK) + "|retVal=" + isFlag(RET_VAL_FLAG_MASK));
     }
 }
