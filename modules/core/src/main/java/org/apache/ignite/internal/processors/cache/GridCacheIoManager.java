@@ -214,6 +214,10 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
             }
 
             if (fut != null && !fut.isDone()) {
+                Thread curThread = Thread.currentThread();
+
+                final int stripe = curThread instanceof IgniteThread ? ((IgniteThread)curThread).stripe() : -1;
+
                 fut.listen(new CI1<IgniteInternalFuture<?>>() {
                     @Override public void apply(IgniteInternalFuture<?> t) {
                         Runnable c = new Runnable() {
@@ -232,10 +236,6 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                                 handleMessage(nodeId, cacheMsg);
                             }
                         };
-
-                        Thread curThread = Thread.currentThread();
-
-                        int stripe = curThread instanceof IgniteThread ? ((IgniteThread)curThread).stripe() : -1;
 
                         if (stripe >= 0)
                             cctx.kernalContext().getStripedExecutorService().execute(stripe, c);
