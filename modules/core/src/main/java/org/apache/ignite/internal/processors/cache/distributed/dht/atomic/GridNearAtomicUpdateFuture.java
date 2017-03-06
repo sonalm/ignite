@@ -734,7 +734,10 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
             cache.updateAllAsyncInternal(cctx.localNodeId(), locUpdate,
                 new GridDhtAtomicCache.UpdateReplyClosure() {
                     @Override public void apply(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
-                        onPrimaryResponse(res.nodeId(), res, false);
+                        if (syncMode != FULL_ASYNC)
+                            onPrimaryResponse(res.nodeId(), res, false);
+                        else if (res.remapTopologyVersion() != null)
+                            ((GridDhtAtomicCache)cctx.cache()).remapToNewPrimary(req);
                     }
                 });
         }
@@ -827,14 +830,23 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
         // Optimize mapping for single key.
         if (singleReq0 != null)
-            mapSingle(singleReq0.req.nodeId(), singleReq0.req);
+            processSingleRequest(singleReq0.req.nodeId(), singleReq0.req);
         else {
             assert mappings0 != null;
 
-            if (size == 0)
+            if (size == 0) {
                 onDone(new GridCacheReturn(cctx, true, true, null, true));
+
+                return;
+            }
             else
                 doUpdate(mappings0);
+        }
+
+        if (syncMode == FULL_ASYNC) {
+            onDone(new GridCacheReturn(cctx, true, true, null, true));
+
+            return;
         }
 
         if (mappingKnown && syncMode == FULL_SYNC && cctx.discovery().topologyVersion() != topVer.topologyVersion())

@@ -48,6 +48,7 @@ import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.jetbrains.annotations.Nullable;
 
+import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.TRANSFORM;
 
 /**
@@ -506,7 +507,13 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
         }
 
         // Optimize mapping for single key.
-        mapSingle(reqState0.req.nodeId(), reqState0.req);
+        processSingleRequest(reqState0.req.nodeId(), reqState0.req);
+
+        if (syncMode == FULL_ASYNC) {
+            onDone(new GridCacheReturn(cctx, true, true, null, true));
+
+            return;
+        }
 
         if (reqState0.req.initMappingLocally() && (cctx.discovery().topologyVersion() != topVer.topologyVersion()))
             checkDhtNodes(futId);

@@ -280,12 +280,15 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param nodeId Node ID.
      * @param req Request.
      */
-    final void mapSingle(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
+    final void processSingleRequest(UUID nodeId, GridNearAtomicAbstractUpdateRequest req) {
         if (cctx.localNodeId().equals(nodeId)) {
             cache.updateAllAsyncInternal(nodeId, req,
                 new GridDhtAtomicCache.UpdateReplyClosure() {
                     @Override public void apply(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
-                        onPrimaryResponse(res.nodeId(), res, false);
+                        if (syncMode != FULL_ASYNC)
+                            onPrimaryResponse(res.nodeId(), res, false);
+                        else if (res.remapTopologyVersion() != null)
+                            ((GridDhtAtomicCache)cctx.cache()).remapToNewPrimary(req);
                     }
                 });
         }
@@ -297,9 +300,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                     msgLog.debug("Near update fut, sent request [futId=" + req.futureId() +
                         ", node=" + req.nodeId() + ']');
                 }
-
-                if (syncMode == FULL_ASYNC)
-                    onDone(new GridCacheReturn(cctx, true, true, null, true));
             }
             catch (IgniteCheckedException e) {
                 if (msgLog.isDebugEnabled()) {
