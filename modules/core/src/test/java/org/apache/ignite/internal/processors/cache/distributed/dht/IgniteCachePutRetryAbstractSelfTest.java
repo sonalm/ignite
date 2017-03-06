@@ -464,7 +464,7 @@ public abstract class IgniteCachePutRetryAbstractSelfTest extends GridCommonAbst
                 @Override public boolean apply() {
                     return ignite.context().cache().context().mvcc().atomicFuturesCount() == 0;
                 }
-            }, 5000);
+            }, 15_000);
 
             Collection<?> futs = ignite.context().cache().context().mvcc().atomicFutures();
 
