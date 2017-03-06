@@ -152,7 +152,12 @@ public abstract class IgniteCachePutRetryAbstractSelfTest extends GridCommonAbst
     @Override protected void afterTest() throws Exception {
         super.afterTest();
 
-        ignite(0).destroyCache(null);
+        try {
+            checkInternalCleanup();
+        }
+        finally {
+            ignite(0).destroyCache(null);
+        }
     }
 
     /**
@@ -456,7 +461,21 @@ public abstract class IgniteCachePutRetryAbstractSelfTest extends GridCommonAbst
 
         for (int i = 0; i < keysCnt; i++)
             assertEquals((Integer)iter, cache.get(i));
+    }
 
+    /**
+     * @throws Exception If failed.
+     */
+    private void checkInternalCleanup() throws Exception{
+        checkNoAtomicFutures();
+
+        checkOnePhaseCommitReturnValuesCleaned();
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    void checkNoAtomicFutures() throws Exception {
         for (int i = 0; i < GRID_CNT; i++) {
             final IgniteKernal ignite = (IgniteKernal)grid(i);
 
@@ -464,14 +483,12 @@ public abstract class IgniteCachePutRetryAbstractSelfTest extends GridCommonAbst
                 @Override public boolean apply() {
                     return ignite.context().cache().context().mvcc().atomicFuturesCount() == 0;
                 }
-            }, 15_000);
+            }, 5_000);
 
             Collection<?> futs = ignite.context().cache().context().mvcc().atomicFutures();
 
             assertTrue("Unexpected atomic futures: " + futs, futs.isEmpty());
         }
-
-        checkOnePhaseCommitReturnValuesCleaned();
     }
 
     /**
