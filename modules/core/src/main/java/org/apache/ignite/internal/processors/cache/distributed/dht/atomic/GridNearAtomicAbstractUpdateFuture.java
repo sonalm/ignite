@@ -407,9 +407,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         @GridToStringInclude
         Set<UUID> dhtNodes;
 
-        @GridToStringInclude
-        private Set<UUID> dhtNodes0;
-
         /** */
         @GridToStringInclude
         private Set<UUID> rcvd;
@@ -419,6 +416,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
         /**
          * @param req Request.
+         * @param nodes Affinity nodes.
+         * @param single {@code True} if created for sigle-key operation.
          */
         PrimaryRequestState(GridNearAtomicAbstractUpdateRequest req, List<ClusterNode> nodes, boolean single) {
             assert req != null && req.nodeId() != null : req;
@@ -426,11 +425,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             this.req = req;
 
             if (req.initMappingLocally()) {
-                dhtNodes0 = new HashSet<>();
-
-                for (ClusterNode n : nodes)
-                    dhtNodes0.add(n.id());
-
                 if (single) {
                     if (nodes.size() > 1) {
                         dhtNodes = U.newHashSet(nodes.size() - 1);
@@ -459,9 +453,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
             for (int i = 1; i < nodes.size(); i++)
                 dhtNodes.add(nodes.get(i).id());
-
-            for (int i = 1; i < nodes.size(); i++)
-                dhtNodes0.add(nodes.get(i).id());
         }
 
         DhtLeftResult checkDhtNodes(GridCacheContext cctx) {
