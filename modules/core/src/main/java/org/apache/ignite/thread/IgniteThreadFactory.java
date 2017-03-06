@@ -61,7 +61,7 @@ public class IgniteThreadFactory implements ThreadFactory {
 
     /** {@inheritDoc} */
     @Override public Thread newThread(@NotNull Runnable r) {
-        return new IgniteThread(gridName, threadName, r, idxGen.incrementAndGet());
+        return new IgniteThread(gridName, threadName, r, idxGen.incrementAndGet(), -1);
     }
 
     /** {@inheritDoc} */

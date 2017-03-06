@@ -107,7 +107,6 @@ import org.apache.ignite.transactions.Transaction;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.apache.ignite.IgniteSystemProperties.IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT;
 import static org.apache.ignite.cache.CacheAtomicWriteOrderMode.PRIMARY;
 import static org.apache.ignite.cache.CacheMemoryMode.ONHEAP_TIERED;
 import static org.apache.ignite.cache.CacheMode.REPLICATED;
@@ -133,10 +132,6 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
     /** */
     private int backups = 1;
 
-    static {
-        System.setProperty(IGNITE_ATOMIC_DEFERRED_ACK_TIMEOUT, "100");
-    }
-
     /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
         IgniteConfiguration cfg = super.getConfiguration(gridName);
@@ -147,6 +142,7 @@ public abstract class CacheContinuousQueryFailoverAbstractSelfTest extends GridC
         TestCommunicationSpi commSpi = new TestCommunicationSpi();
 
         commSpi.setSharedMemoryPort(-1);
+        commSpi.setIdleConnectionTimeout(100);
 
         cfg.setCommunicationSpi(commSpi);
 

@@ -47,7 +47,6 @@ import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtTxPrep
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtTxPrepareResponse;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridPartitionedSingleGetFuture;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest;
-import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicNearResponse;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicSingleUpdateRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicUpdateRequest;
 import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicUpdateResponse;
@@ -86,6 +85,7 @@ import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiInClosure;
 import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.lang.IgniteUuid;
+import org.apache.ignite.thread.IgniteThread;
 import org.jetbrains.annotations.Nullable;
 import org.jsr166.ConcurrentHashMap8;
 
@@ -233,8 +233,12 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                             }
                         };
 
-                        if (((GridCacheMessage)msg).partition() >= 0)
-                            cctx.kernalContext().getStripedExecutorService().execute(((GridCacheMessage) msg).partition(), c);
+                        Thread curThread = Thread.currentThread();
+
+                        int stripe = curThread instanceof IgniteThread ? ((IgniteThread)curThread).stripe() : -1;
+
+                        if (stripe >= 0)
+                            cctx.kernalContext().getStripedExecutorService().execute(stripe, c);
                         else
                             cctx.kernalContext().closure().runLocalSafe(c);
                     }

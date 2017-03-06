@@ -435,7 +435,7 @@ public class StripedExecutor implements ExecutorService {
          * Starts the stripe.
          */
         void start() {
-            thread = new IgniteThread(gridName, poolName + "-stripe-" + idx, this);
+            thread = new IgniteThread(gridName, poolName + "-stripe-" + idx, this, IgniteThread.GRP_IDX_UNASSIGNED, idx);
 
             thread.start();
         }

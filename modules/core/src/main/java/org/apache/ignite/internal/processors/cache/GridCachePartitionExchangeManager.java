@@ -1480,70 +1480,68 @@ public class GridCachePartitionExchangeManager<K, V> extends GridCacheSharedMana
      * @param exchTopVer Exchange topology version.
      */
     private void dumpPendingObjects(@Nullable AffinityTopologyVersion exchTopVer) {
-        synchronized (getClass()) {
-            IgniteTxManager tm = cctx.tm();
+        IgniteTxManager tm = cctx.tm();
+
+        if (tm != null) {
+            U.warn(log, "Pending transactions:");
+
+            for (IgniteInternalTx tx : tm.activeTransactions()) {
+                if (exchTopVer != null) {
+                    U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() +
+                        ", exchWait=" + tm.needWaitTransaction(tx, exchTopVer) +
+                        ", tx=" + tx + ']');
+                }
+                else
+                    U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() + ", tx=" + tx + ']');
+            }
+        }
+
+        GridCacheMvccManager mvcc = cctx.mvcc();
+
+        if (mvcc != null) {
+            U.warn(log, "Pending explicit locks:");
+
+            for (GridCacheExplicitLockSpan lockSpan : mvcc.activeExplicitLocks())
+                U.warn(log, ">>> " + lockSpan);
+
+            U.warn(log, "Pending cache futures:");
+
+            for (GridCacheFuture<?> fut : mvcc.activeFutures())
+                U.warn(log, ">>> " + fut);
+
+            U.warn(log, "Pending atomic cache futures:");
+
+            for (GridCacheFuture<?> fut : mvcc.atomicFutures())
+                U.warn(log, ">>> " + fut);
+
+            U.warn(log, "Pending data streamer futures:");
+
+            for (IgniteInternalFuture<?> fut : mvcc.dataStreamerFutures())
+                U.warn(log, ">>> " + fut);
 
             if (tm != null) {
-                U.warn(log, "Pending transactions:");
+                U.warn(log, "Pending transaction deadlock detection futures:");
 
-                for (IgniteInternalTx tx : tm.activeTransactions()) {
-                    if (exchTopVer != null) {
-                        U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() +
-                                ", exchWait=" + tm.needWaitTransaction(tx, exchTopVer) +
-                                ", tx=" + tx + ']');
-                    }
-                    else
-                        U.warn(log, ">>> [txVer=" + tx.topologyVersionSnapshot() + ", tx=" + tx + ']');
-                }
-            }
-
-            GridCacheMvccManager mvcc = cctx.mvcc();
-
-            if (mvcc != null) {
-                U.warn(log, "Pending explicit locks:");
-
-                for (GridCacheExplicitLockSpan lockSpan : mvcc.activeExplicitLocks())
-                    U.warn(log, ">>> " + lockSpan);
-
-                U.warn(log, "Pending cache futures:");
-
-                for (GridCacheFuture<?> fut : mvcc.activeFutures())
+                for (IgniteInternalFuture<?> fut : tm.deadlockDetectionFutures())
                     U.warn(log, ">>> " + fut);
-
-                U.warn(log, "Pending atomic cache futures:");
-
-                for (GridCacheFuture<?> fut : mvcc.atomicFutures())
-                    U.warn(log, ">>> " + fut);
-
-                U.warn(log, "Pending data streamer futures:");
-
-                for (IgniteInternalFuture<?> fut : mvcc.dataStreamerFutures())
-                    U.warn(log, ">>> " + fut);
-
-                if (tm != null) {
-                    U.warn(log, "Pending transaction deadlock detection futures:");
-
-                    for (IgniteInternalFuture<?> fut : tm.deadlockDetectionFutures())
-                        U.warn(log, ">>> " + fut);
-                }
             }
+        }
 
-            for (GridCacheContext ctx : cctx.cacheContexts()) {
-                if (ctx.isLocal())
-                    continue;
+        for (GridCacheContext ctx : cctx.cacheContexts()) {
+            if (ctx.isLocal())
+                continue;
 
-                GridCacheContext ctx0 = ctx.isNear() ? ctx.near().dht().context() : ctx;
+            GridCacheContext ctx0 = ctx.isNear() ? ctx.near().dht().context() : ctx;
 
-                GridCachePreloader preloader = ctx0.preloader();
+            GridCachePreloader preloader = ctx0.preloader();
 
-                if (preloader != null)
-                    preloader.dumpDebugInfo();
+            if (preloader != null)
+                preloader.dumpDebugInfo();
 
-                GridCacheAffinityManager affMgr = ctx0.affinity();
+            GridCacheAffinityManager affMgr = ctx0.affinity();
 
-                if (affMgr != null)
-                    affMgr.dumpDebugInfo();
-            }
+            if (affMgr != null)
+                affMgr.dumpDebugInfo();
         }
     }
 

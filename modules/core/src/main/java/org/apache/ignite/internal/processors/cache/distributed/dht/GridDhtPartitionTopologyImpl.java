@@ -871,7 +871,7 @@ class GridDhtPartitionTopologyImpl implements GridDhtPartitionTopology {
                 }
             }
 
-            return nodes != null ? nodes : null;
+            return nodes;
         }
         finally {
             lock.readLock().unlock();
