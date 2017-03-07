@@ -139,11 +139,11 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         GridNearAtomicCheckUpdateRequest checkReq = null;
 
+        boolean rcvAll = false;
+
         synchronized (mux) {
             if (reqState == null)
                 return false;
-
-            boolean rcvAll = false;
 
             if (reqState.req.nodeId.equals(nodeId)) {
                 GridNearAtomicAbstractUpdateRequest req = reqState.processPrimaryResponse(nodeId);
@@ -178,7 +178,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
 
         if (checkReq != null)
             sendCheckUpdateRequest(checkReq);
-        else
+        else if (rcvAll)
             finishUpdateFuture(opRes0, err0, remapTopVer0);
 
         return false;
