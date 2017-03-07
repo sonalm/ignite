@@ -358,6 +358,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
             req.nodeId(),
             req.futureId(),
+            req.partition(),
+            true,
             cctx.deploymentEnabled());
 
         ClusterTopologyCheckedException e = new ClusterTopologyCheckedException("Primary node left grid " +
@@ -378,6 +380,8 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
             req.nodeId(),
             req.futureId(),
+            req.partition(),
+            e instanceof ClusterTopologyCheckedException,
             cctx.deploymentEnabled());
 
         res.addFailedKeys(req.keys(), e);
@@ -387,9 +391,11 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
     final void onSendError(GridNearAtomicCheckUpdateRequest req, IgniteCheckedException e) {
         GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
-                req.updateRequest().nodeId(),
-                req.futureId(),
-                cctx.deploymentEnabled());
+            req.updateRequest().nodeId(),
+            req.futureId(),
+            req.partition(),
+            e instanceof ClusterTopologyCheckedException,
+            cctx.deploymentEnabled());
 
         res.addFailedKeys(req.updateRequest().keys(), e);
 
@@ -497,17 +503,35 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         }
 
         /**
-         * @param nodeId Node ID.
-         * @return Request if need process primary response, {@code null} otherwise.
+         * @return Request if need process primary fail response, {@code null} otherwise.
          */
-        @Nullable GridNearAtomicAbstractUpdateRequest processPrimaryResponse(UUID nodeId) {
+        @Nullable GridNearAtomicAbstractUpdateRequest onPrimaryFail() {
             if (finished())
                 return null;
 
-            if (req != null && req.nodeId().equals(nodeId) && req.response() == null)
-                return req;
+            if (req.fullSync() && !req.nodeFailedResponse()) {
+                req.resetResponse();
 
-            return null;
+                return req;
+            }
+
+            return req.response() == null ? req : null;
+        }
+
+        /**
+         * @param nodeId Node ID.
+         * @return Request if need process primary response, {@code null} otherwise.
+         */
+        @Nullable GridNearAtomicAbstractUpdateRequest processPrimaryResponse(UUID nodeId, GridNearAtomicUpdateResponse res) {
+            assert req.nodeId().equals(nodeId);
+
+            if (res.nodeLeftResponse())
+                return onPrimaryFail();
+
+            if (finished())
+                return null;
+
+            return req.response() == null ? req : null;
         }
 
         /**
@@ -558,6 +582,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
         /**
          * @param res Response.
+         * @param cctx Cache context.
          * @return {@code True} if request processing finished.
          */
         boolean onPrimaryResponse(GridNearAtomicUpdateResponse res, GridCacheContext cctx) {

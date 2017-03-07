@@ -101,6 +101,10 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
     @GridToStringInclude
     private List<UUID> dhtNodes;
 
+    /** */
+    @GridDirectTransient
+    private boolean nodeLeft;
+
     /**
      * Empty constructor required by {@link Externalizable}.
      */
@@ -114,11 +118,22 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param futId Future ID.
      * @param addDepInfo Deployment info flag.
      */
-    public GridNearAtomicUpdateResponse(int cacheId, UUID nodeId, long futId, boolean addDepInfo) {
+    public GridNearAtomicUpdateResponse(int cacheId,
+        UUID nodeId,
+        long futId,
+        int partId,
+        boolean nodeLeft,
+        boolean addDepInfo) {
         this.cacheId = cacheId;
         this.nodeId = nodeId;
         this.futId = futId;
+        this.partId = partId;
+        this.nodeLeft = nodeLeft;
         this.addDepInfo = addDepInfo;
+    }
+
+    public boolean nodeLeftResponse() {
+        return nodeLeft;
     }
 
     /** {@inheritDoc} */
@@ -159,13 +174,6 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      */
     public long futureId() {
         return futId;
-    }
-
-    /**
-     * @param partId Partition ID for proper striping on near node.
-     */
-    public void partition(int partId) {
-        this.partId = partId;
     }
 
     /**

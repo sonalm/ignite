@@ -81,6 +81,7 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         cfg.setConsistentId(gridName);
 
         ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setIpFinder(ipFinder);
+        ((TcpDiscoverySpi)cfg.getDiscoverySpi()).setMaxMissedClientHeartbeats(1000);
 
         TestRecordingCommunicationSpi commSpi = new TestRecordingCommunicationSpi();
 
@@ -628,6 +629,121 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
      */
     public void testRemoveAll() throws Exception {
         // TODO IGNITE-4705 (some keys exist, some not).
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutMissedDhtRequest_UnstableTopology() throws Exception {
+        blockRebalance = true;
+
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
+        startServers(4);
+
+        client = true;
+
+        Ignite client = startGrid(4);
+
+        IgniteCache<Integer, Integer> nearCache = client.cache(TEST_CACHE);
+        IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
+
+        testSpi(ignite(0)).blockMessages(new IgnitePredicate<GridIoMessage>() {
+            @Override public boolean apply(GridIoMessage msg) {
+                return msg.message() instanceof GridDhtAtomicAbstractUpdateRequest;
+            }
+        });
+
+        Integer key = primaryKey(ignite(0).cache(TEST_CACHE));
+
+        log.info("Start put [key=" + key + ']');
+
+        nearAsyncCache.put(key, key);
+        IgniteFuture<?> fut = nearAsyncCache.future();
+
+        U.sleep(500);
+
+        assertFalse(fut.isDone());
+
+        stopGrid(0);
+
+        fut.get();
+
+        checkData(F.asMap(key, key));
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutAllMissedDhtRequest_UnstableTopology1() throws Exception {
+        putAllMissedDhtRequest_UnstableTopology(true, false);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testPutAllMissedDhtRequest_UnstableTopology2() throws Exception {
+        putAllMissedDhtRequest_UnstableTopology(true, true);
+    }
+
+    /**
+     * @param fail0 Fail node 0 flag.
+     * @param fail1 Fail node 1 flag.
+     * @throws Exception If failed.
+     */
+    private void putAllMissedDhtRequest_UnstableTopology(boolean fail0, boolean fail1) throws Exception {
+        blockRebalance = true;
+
+        ccfg = cacheConfiguration(1, FULL_SYNC);
+
+        startServers(4);
+
+        client = true;
+
+        Ignite client = startGrid(4);
+
+        IgniteCache<Integer, Integer> nearCache = client.cache(TEST_CACHE);
+        IgniteCache<Integer, Integer> nearAsyncCache = nearCache.withAsync();
+
+        if (fail0) {
+            testSpi(ignite(0)).blockMessages(new IgnitePredicate<GridIoMessage>() {
+                @Override public boolean apply(GridIoMessage msg) {
+                    return msg.message() instanceof GridDhtAtomicAbstractUpdateRequest;
+                }
+            });
+        }
+        if (fail1) {
+            testSpi(ignite(2)).blockMessages(new IgnitePredicate<GridIoMessage>() {
+                @Override public boolean apply(GridIoMessage msg) {
+                    return msg.message() instanceof GridDhtAtomicAbstractUpdateRequest;
+                }
+            });
+        }
+
+        Integer key1 = primaryKey(ignite(0).cache(TEST_CACHE));
+        Integer key2 = primaryKey(ignite(2).cache(TEST_CACHE));
+
+        log.info("Start put [key1=" + key1 + ", key2=" + key1 + ']');
+
+        Map<Integer, Integer> map = new HashMap<>();
+        map.put(key1, 10);
+        map.put(key2, 20);
+
+        nearAsyncCache.putAll(map);
+        IgniteFuture<?> fut = nearAsyncCache.future();
+
+        U.sleep(500);
+
+        assertFalse(fut.isDone());
+
+        if (fail0)
+            stopGrid(0);
+        if (fail1)
+            stopGrid(2);
+
+        fut.get();
+
+        checkData(map);
     }
 
     /**

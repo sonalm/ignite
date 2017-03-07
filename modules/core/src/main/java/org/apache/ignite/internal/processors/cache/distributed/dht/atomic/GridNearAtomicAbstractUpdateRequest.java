@@ -265,11 +265,19 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return false;
     }
 
+    void resetResponse() {
+        this.res = null;
+    }
+
     /**
      * @return Response.
      */
     @Nullable public GridNearAtomicUpdateResponse response() {
         return res;
+    }
+
+    boolean nodeFailedResponse() {
+        return res != null && res.nodeLeftResponse();
     }
 
     /**

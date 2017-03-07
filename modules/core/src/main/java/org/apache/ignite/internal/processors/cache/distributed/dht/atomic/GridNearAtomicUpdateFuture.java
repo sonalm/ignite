@@ -172,7 +172,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
 
             if (singleReq != null) {
                 if (singleReq.req.nodeId.equals(nodeId)) {
-                    GridNearAtomicAbstractUpdateRequest req = singleReq.processPrimaryResponse(nodeId);
+                    GridNearAtomicAbstractUpdateRequest req = singleReq.onPrimaryFail();
 
                     if (req != null) {
                         rcvAll = true;
@@ -211,7 +211,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                     boolean reqDone = false;
 
                     if (e.getKey().equals(nodeId)) {
-                        GridNearAtomicAbstractUpdateRequest req = reqState.processPrimaryResponse(nodeId);
+                        GridNearAtomicAbstractUpdateRequest req = reqState.onPrimaryFail();
 
                         if (req != null) {
                             reqDone = true;
@@ -377,7 +377,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 return;
 
             if (singleReq != null) {
-                req = singleReq.processPrimaryResponse(nodeId);
+                req = singleReq.processPrimaryResponse(nodeId, res);
 
                 if (req == null)
                     return;
@@ -393,7 +393,7 @@ public class GridNearAtomicUpdateFuture extends GridNearAtomicAbstractUpdateFutu
                 if (reqState == null)
                     return;
 
-                req = reqState.processPrimaryResponse(nodeId);
+                req = reqState.processPrimaryResponse(nodeId, res);
 
                 if (req != null) {
                     if (reqState.onPrimaryResponse(res, cctx)) {

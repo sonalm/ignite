@@ -590,6 +590,8 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                     ctx.cacheId(),
                     nodeId,
                     req.futureId(),
+                    req.partition(),
+                    false,
                     ctx.deploymentEnabled());
 
                 res.error(req.classError());
@@ -768,6 +770,8 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                     ctx.cacheId(),
                     nodeId,
                     req.futureId(),
+                    req.partition(),
+                    false,
                     ctx.deploymentEnabled());
 
                 res.error(req.classError());
@@ -784,6 +788,8 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                     ctx.cacheId(),
                     nodeId,
                     req.futureId(),
+                    req.partition(),
+                    false,
                     ctx.deploymentEnabled());
 
                 res.error(req.classError());
@@ -800,6 +806,8 @@ public class GridCacheIoManager extends GridCacheSharedManagerAdapter {
                     ctx.cacheId(),
                     nodeId,
                     req.futureId(),
+                    req.partition(),
+                    false,
                     ctx.deploymentEnabled());
 
                 res.error(req.classError());
