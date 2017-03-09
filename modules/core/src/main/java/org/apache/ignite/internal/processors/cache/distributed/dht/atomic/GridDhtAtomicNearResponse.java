@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
 
 /**
- *
+ * Message sent from DHT nodes to near node in FULL_SYNC mode.
  */
 public class GridDhtAtomicNearResponse extends GridCacheMessage {
     /** */

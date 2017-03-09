@@ -395,6 +395,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         onPrimaryResponse(req.nodeId(), res, true);
     }
 
+    /**
+     * @param req Request.
+     * @param e Error.
+     */
     final void onSendError(GridNearAtomicCheckUpdateRequest req, IgniteCheckedException e) {
         GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
             req.updateRequest().nodeId(),

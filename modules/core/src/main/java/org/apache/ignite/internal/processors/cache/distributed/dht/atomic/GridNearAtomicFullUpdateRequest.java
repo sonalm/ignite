@@ -122,7 +122,6 @@ public class GridNearAtomicFullUpdateRequest extends GridNearAtomicAbstractUpdat
      * @param cacheId Cache ID.
      * @param nodeId Node ID.
      * @param futId Future ID.
-     * @param fastMap Fast map scheme flag.
      * @param topVer Topology version.
      * @param topLocked Topology locked flag.
      * @param syncMode Synchronization mode.

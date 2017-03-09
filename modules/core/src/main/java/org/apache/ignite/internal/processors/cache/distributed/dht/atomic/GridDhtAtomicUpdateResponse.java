@@ -81,24 +81,6 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
         this.addDepInfo = addDepInfo;
     }
 
-    /**
-     * @param key Key.
-     * @param e Error.
-     */
-    public void addFailedKey(KeyCacheObject key, Throwable e) {
-        if (errs == null)
-            errs = new UpdateErrors();
-
-        errs.addFailedKey(key, e);
-    }
-
-    /**
-     * @return Errors.
-     */
-    @Nullable UpdateErrors errors() {
-        return errs;
-    }
-
     /** {@inheritDoc} */
     @Override public int lookupIndex() {
         return CACHE_MSG_IDX;
@@ -131,20 +113,8 @@ public class GridDhtAtomicUpdateResponse extends GridCacheMessage implements Gri
     /**
      * @return Evicted readers.
      */
-    public Collection<KeyCacheObject> nearEvicted() {
+    Collection<KeyCacheObject> nearEvicted() {
         return nearEvicted;
-    }
-
-    /**
-     * Adds near evicted key..
-     *
-     * @param key Evicted key.
-     */
-    public void addNearEvicted(KeyCacheObject key) {
-        if (nearEvicted == null)
-            nearEvicted = new ArrayList<>();
-
-        nearEvicted.add(key);
     }
 
     /**

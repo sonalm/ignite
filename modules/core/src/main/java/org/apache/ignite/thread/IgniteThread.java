@@ -117,6 +117,9 @@ public class IgniteThread extends Thread {
         this.stripe = -1;
     }
 
+    /**
+     * @return Non-negative value if this thread is striped pool thread.
+     */
     public int stripe() {
         return stripe;
     }

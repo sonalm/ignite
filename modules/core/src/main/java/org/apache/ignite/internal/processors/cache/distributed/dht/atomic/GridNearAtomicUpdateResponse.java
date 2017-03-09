@@ -116,6 +116,8 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
      * @param cacheId Cache ID.
      * @param nodeId Node ID this reply should be sent to.
      * @param futId Future ID.
+     * @param partId Partition.
+     * @param nodeLeft {@code True} if primary node failed.
      * @param addDepInfo Deployment info flag.
      */
     public GridNearAtomicUpdateResponse(int cacheId,
@@ -132,6 +134,9 @@ public class GridNearAtomicUpdateResponse extends GridCacheMessage implements Gr
         this.addDepInfo = addDepInfo;
     }
 
+    /**
+     * @return {@code True} if primary node failed.
+     */
     public boolean nodeLeftResponse() {
         return nodeLeft;
     }

@@ -709,6 +709,7 @@ public class GridNearAtomicSingleUpdateFuture extends GridNearAtomicAbstractUpda
     /**
      * @param opRes Operation result.
      * @param err Operation error.
+     * @param remapTopVer Not-null topology version if need remap update.
      */
     private void finishUpdateFuture(GridCacheReturn opRes,
         CachePartialUpdateCheckedException err,

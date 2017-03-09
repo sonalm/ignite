@@ -294,14 +294,14 @@ public class GridDhtAtomicSingleUpdateRequest extends GridDhtAtomicAbstractUpdat
     }
 
     /**
-     *
+     * @return {@code True} if near cache update request.
      */
     private boolean near() {
         return isFlag(DHT_ATOMIC_NEAR_FLAG_MASK);
     }
 
     /**
-     *
+     * @param near Near cache update flag.
      */
     private void near(boolean near) {
         setFlag(near, DHT_ATOMIC_NEAR_FLAG_MASK);

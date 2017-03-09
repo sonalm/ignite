@@ -161,8 +161,6 @@ public class IgniteCacheP2pUnmarshallingErrorTest extends IgniteCacheAbstractTes
         // GridDhtAtomicUpdateRequest unmarshalling failed test.
         readCnt.set(2);
 
-        log.info("Start put: ");
-
         failAtomicPut(++key);
 
         // Check that cache is not empty.
