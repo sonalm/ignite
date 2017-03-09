@@ -95,34 +95,20 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /** Response count. */
     private volatile int resCnt;
 
-    /** */
-    @GridToStringExclude
-    private final GridNearAtomicUpdateResponse updateRes;
-
-    /** */
-    @GridToStringExclude
-    private final GridDhtAtomicCache.UpdateReplyClosure completionCb;
-
     /**
      * @param cctx Cache context.
      * @param writeVer Write version.
      * @param updateReq Update request.
-     * @param updateRes Response.
-     * @param completionCb Callback to invoke to send response to near node.
      */
     protected GridDhtAtomicAbstractUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
         this.cctx = cctx;
 
         this.updateReq = updateReq;
         this.writeVer = writeVer;
-        this.updateRes = updateRes;
-        this.completionCb = completionCb;
 
         futId = cctx.mvcc().atomicFutureId();
 
@@ -132,7 +118,10 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         }
     }
 
-    protected abstract boolean allUpdated();
+    /**
+     * @return {@code True} if all updates are sent to DHT.
+     */
+    protected abstract boolean sendAllToDht();
 
     /** {@inheritDoc} */
     @Override public final IgniteInternalFuture<Void> completeFuture(AffinityTopologyVersion topVer) {
@@ -162,6 +151,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     }
 
     /**
+     * @param affAssignment Affinity assignment.
      * @param entry Entry to map.
      * @param val Value to write.
      * @param entryProcessor Entry processor.
@@ -362,9 +352,15 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
     /**
      * Sends requests to remote nodes.
      *
+     * @param nearNode Near node.
      * @param ret Cache operation return value.
+     * @param updateRes Response.
+     * @param completionCb Callback to invoke to send response to near node.
      */
-    final void map(ClusterNode nearNode, GridCacheReturn ret) {
+    final void map(ClusterNode nearNode,
+        GridCacheReturn ret,
+        GridNearAtomicUpdateResponse updateRes,
+        GridDhtAtomicCache.UpdateReplyClosure completionCb) {
         if (F.isEmpty(mappings)) {
             updateRes.dhtNodes(Collections.<UUID>emptyList());
 
@@ -380,7 +376,7 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             updateRes.nearVersion() != null ||
             cctx.localNodeId().equals(nearNode.id());
 
-        boolean needMapping = updateReq.fullSync() && (updateReq.needPrimaryResponse() || !allUpdated());
+        boolean needMapping = updateReq.fullSync() && (updateReq.needPrimaryResponse() || !sendAllToDht());
 
         if (needMapping) {
             initMapping(updateRes);
@@ -394,6 +390,9 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
             completionCb.apply(updateReq, updateRes);
     }
 
+    /**
+     * @param updateRes Response.
+     */
     private void initMapping(GridNearAtomicUpdateResponse updateRes) {
         List<UUID> dhtNodes;
 
@@ -463,6 +462,10 @@ public abstract class GridDhtAtomicAbstractUpdateFuture extends GridFutureAdapte
         registerResponse(nodeId);
     }
 
+    /**
+     * @param nodeId Node ID.
+     * @param res Response.
+     */
     final void onDhtResponse(UUID nodeId, GridDhtAtomicUpdateResponse res) {
         if (!F.isEmpty(res.nearEvicted())) {
             for (KeyCacheObject key : res.nearEvicted()) {

@@ -19,12 +19,10 @@ package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.io.Externalizable;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.UUID;
 import javax.cache.processor.EntryProcessor;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
-import org.apache.ignite.internal.GridDirectCollection;
 import org.apache.ignite.internal.GridDirectTransient;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.CacheObject;
@@ -33,7 +31,6 @@ import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
-import org.apache.ignite.plugin.extensions.communication.MessageCollectionItemType;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.NotNull;
@@ -56,7 +53,7 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
 
     /** */
-    static final int DHT_ATOMIC_REPLY_WITHOUT_DELAY = 0x01;
+    static final int DHT_ATOMIC_REPLY_WITHOUT_DELAY = 0x10;
 
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
@@ -297,7 +294,7 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     /**
      * @return Future ID on near node.
      */
-    final long nearFutureId() {
+    public final long nearFutureId() {
         return nearFutId;
     }
 

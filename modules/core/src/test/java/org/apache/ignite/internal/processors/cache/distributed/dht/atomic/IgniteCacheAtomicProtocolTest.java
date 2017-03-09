@@ -18,8 +18,10 @@
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import javax.cache.processor.MutableEntry;
 import org.apache.ignite.Ignite;
@@ -622,6 +624,17 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         map.put(keys.get(1), new SetValueEntryProcessor(null));
 
         nearCache.invokeAll(map);
+
+        Set<Integer> rmvAllKeys = new HashSet<>();
+
+        for (int i = 0; i < 100; i++) {
+            nearCache.put(i, i);
+
+            if (i % 2 == 0)
+                rmvAllKeys.add(i);
+        }
+
+        nearCache.removeAll(rmvAllKeys);
     }
 
     /**

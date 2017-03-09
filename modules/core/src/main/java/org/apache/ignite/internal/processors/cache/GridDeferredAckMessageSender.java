@@ -54,17 +54,18 @@ public abstract class GridDeferredAckMessageSender {
     }
 
     /**
-     *
+     * @return Timeout.
      */
     public abstract int getTimeout();
 
     /**
-     *
+     * @return Buffer size.
      */
     public abstract int getBufferSize();
 
     /**
-     *
+     * @param nodeId Node ID.
+     * @param vers Versions to send.
      */
     public abstract void finish(UUID nodeId, ConcurrentLinkedDeque8<GridCacheVersion> vers);
 

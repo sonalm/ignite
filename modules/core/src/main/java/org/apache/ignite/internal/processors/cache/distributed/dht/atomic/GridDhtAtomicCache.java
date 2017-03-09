@@ -49,7 +49,6 @@ import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.CacheOperationContext;
 import org.apache.ignite.internal.processors.cache.CacheStorePartialUpdateException;
 import org.apache.ignite.internal.processors.cache.EntryGetResult;
-import org.apache.ignite.internal.processors.cache.GridCacheAtomicFuture;
 import org.apache.ignite.internal.processors.cache.GridCacheConcurrentMap;
 import org.apache.ignite.internal.processors.cache.GridCacheContext;
 import org.apache.ignite.internal.processors.cache.GridCacheEntryEx;
@@ -419,11 +418,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     }
                 });
         }
-    }
-
-    /** {@inheritDoc} */
-    @Override public void stop() {
-        // TODO 4705: need send deferred response?
     }
 
     /**
@@ -1799,7 +1793,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                         boolean sndPrevVal = !top.rebalanceFinished(req.topologyVersion());
 
-                        dhtFut = createDhtFuture(ver, req, res, completionCb);
+                        dhtFut = createDhtFuture(ver, req);
 
                         expiry = expiryPolicy(req.expiry());
 
@@ -1914,15 +1908,9 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
             completionCb.apply(req, res);
         }
-        else {
-            // If there are backups, map backup update future.
-            if (dhtFut != null) {
-                dhtFut.map(node, res.returnValue());
-                // Otherwise, complete the call.
-            }
-            else
-                completionCb.apply(req, res);
-        }
+        else
+            if (dhtFut != null)
+                dhtFut.map(node, res.returnValue(), res, completionCb);
 
         if (req.writeSynchronizationMode() != FULL_ASYNC)
             req.cleanup(!node.isLocal());
@@ -2383,8 +2371,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         boolean checkReaders = hasNear || ctx.discovery().hasNearCache(ctx.cacheId(), topVer);
 
-        boolean readersOnly = false;
-
         boolean intercept = ctx.config().getInterceptor() != null;
 
         AffinityAssignment affAssignment = ctx.affinity().assignment(topVer);
@@ -2446,12 +2432,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                     /*updateCntr*/null,
                     dhtFut);
 
-                if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                    dhtFut = createDhtFuture(ver, req, null, null); // TODO IGNITE-4705.
-
-                    readersOnly = true;
-                }
-
                 if (dhtFut != null) {
                     if (updRes.sendToDht()) { // Send to backups even in case of remove-remove scenarios.
                         GridCacheVersionConflictContext<?, ?> conflictCtx = updRes.conflictResolveResult();
@@ -2463,19 +2443,17 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                         EntryProcessor<Object, Object, Object> entryProcessor = null;
 
-                        if (!readersOnly) {
-                            dhtFut.addWriteEntry(
-                                affAssignment,
-                                entry,
-                                updRes.newValue(),
-                                entryProcessor,
-                                updRes.newTtl(),
-                                updRes.conflictExpireTime(),
-                                newConflictVer,
-                                sndPrevVal,
-                                updRes.oldValue(),
-                                updRes.updateCounter());
-                        }
+                        dhtFut.addWriteEntry(
+                            affAssignment,
+                            entry,
+                            updRes.newValue(),
+                            entryProcessor,
+                            updRes.newTtl(),
+                            updRes.conflictExpireTime(),
+                            newConflictVer,
+                            sndPrevVal,
+                            updRes.oldValue(),
+                            updRes.updateCounter());
 
                         if (!F.isEmpty(filteredReaders))
                             dhtFut.addNearWriteEntries(
@@ -2730,29 +2708,21 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
                     batchRes.addDeleted(entry, updRes, entries);
 
-                    if (dhtFut == null && !F.isEmpty(filteredReaders)) {
-                        dhtFut = createDhtFuture(ver, req, null, null); // TODO IGNITE-4705.
-
-                        batchRes.readersOnly(true);
-                    }
-
                     if (dhtFut != null) {
                         EntryProcessor<Object, Object, Object> entryProcessor =
                             entryProcessorMap == null ? null : entryProcessorMap.get(entry.key());
 
-                        if (!batchRes.readersOnly()) {
-                            dhtFut.addWriteEntry(
-                                affAssignment,
-                                entry,
-                                writeVal,
-                                entryProcessor,
-                                updRes.newTtl(),
-                                CU.EXPIRE_TIME_CALCULATE,
-                                null,
-                                sndPrevVal,
-                                updRes.oldValue(),
-                                updRes.updateCounter());
-                        }
+                        dhtFut.addWriteEntry(
+                            affAssignment,
+                            entry,
+                            writeVal,
+                            entryProcessor,
+                            updRes.newTtl(),
+                            CU.EXPIRE_TIME_CALCULATE,
+                            null,
+                            sndPrevVal,
+                            updRes.oldValue(),
+                            updRes.updateCounter());
 
                         if (!F.isEmpty(filteredReaders))
                             dhtFut.addNearWriteEntries(
@@ -3027,18 +2997,16 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      *
      * @param writeVer Write version.
      * @param updateReq Update request.
-     * @return Backup update future or {@code null} if there are no backups.
+     * @return Backup update future.
      */
-    @Nullable private GridDhtAtomicAbstractUpdateFuture createDhtFuture(
+    private GridDhtAtomicAbstractUpdateFuture createDhtFuture(
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
         if (updateReq.size() == 1)
-            return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq, updateRes, completionCb);
+            return new GridDhtAtomicSingleUpdateFuture(ctx, writeVer, updateReq);
         else
-            return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq, updateRes, completionCb);
+            return new GridDhtAtomicUpdateFuture(ctx, writeVer, updateReq);
     }
 
     /**
@@ -3563,9 +3531,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         private GridDhtAtomicAbstractUpdateFuture dhtFut;
 
         /** */
-        private boolean readersOnly;
-
-        /** */
         private GridCacheReturn invokeRes;
 
         /**
@@ -3617,20 +3582,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
          */
         private void dhtFuture(@Nullable GridDhtAtomicAbstractUpdateFuture dhtFut) {
             this.dhtFut = dhtFut;
-        }
-
-        /**
-         * @return {@code True} if only readers (not backups) should be updated.
-         */
-        private boolean readersOnly() {
-            return readersOnly;
-        }
-
-        /**
-         * @param readersOnly {@code True} if only readers (not backups) should be updated.
-         */
-        private void readersOnly(boolean readersOnly) {
-            this.readersOnly = readersOnly;
         }
     }
 

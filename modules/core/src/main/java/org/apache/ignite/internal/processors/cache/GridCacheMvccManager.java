@@ -106,6 +106,9 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
     @GridToStringExclude
     private final ConcurrentMap<GridCacheVersion, Collection<GridCacheMvccFuture<?>>> mvccFuts = newMap();
 
+    /** */
+    private final AtomicLong atomicFutId = new AtomicLong(U.currentTimeMillis());
+
     /** Pending atomic futures. */
     private final ConcurrentHashMap8<Long, GridCacheAtomicFuture<?>> atomicFuts = new ConcurrentHashMap8<>();
 
@@ -134,9 +137,6 @@ public class GridCacheMvccManager extends GridCacheSharedManagerAdapter {
 
     /** */
     private volatile boolean stopping;
-
-    /** */
-    private final AtomicLong atomicFutId = new AtomicLong(U.currentTimeMillis());
 
     /** Lock callback. */
     @GridToStringExclude

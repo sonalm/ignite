@@ -50,15 +50,13 @@ class GridDhtAtomicSingleUpdateFuture extends GridDhtAtomicAbstractUpdateFuture 
     GridDhtAtomicSingleUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
-        super(cctx, writeVer, updateReq, updateRes, completionCb);
+        super(cctx, writeVer, updateReq);
     }
 
     /** {@inheritDoc} */
-    @Override protected boolean allUpdated() {
+    @Override protected boolean sendAllToDht() {
         return allUpdated;
     }
 

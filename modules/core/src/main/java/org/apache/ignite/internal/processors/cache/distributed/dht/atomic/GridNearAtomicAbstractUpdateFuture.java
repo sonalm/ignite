@@ -328,15 +328,21 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      */
     public abstract void onDhtResponse(UUID nodeId, GridDhtAtomicNearResponse res);
 
+    /**
+     * @param req Request.
+     * @param res Response.
+     */
     final void onPrimaryError(GridNearAtomicAbstractUpdateRequest req, GridNearAtomicUpdateResponse res) {
         assert res.error() != null;
 
         if (err == null)
             err = new CachePartialUpdateCheckedException("Failed to update keys (retry update if possible).");
 
-        Collection<Object> keys = new ArrayList<>(res.failedKeys().size());
+        Collection<KeyCacheObject> keys0 = res.failedKeys() != null ? res.failedKeys() : req.keys();
 
-        for (KeyCacheObject key : res.failedKeys())
+        Collection<Object> keys = new ArrayList<>(keys0.size());
+
+        for (KeyCacheObject key : keys0)
             keys.add(cctx.cacheObjectContext().unwrapBinaryIfNeeded(key, keepBinary, false));
 
         err.add(keys, res.error(), req.topologyVersion());
@@ -553,8 +559,6 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         }
 
         /**
-         * TODO 4705: check response for errors.
-         *
          * @param nodeId Node ID.
          * @param res Response.
          * @return {@code True} if request processing finished.

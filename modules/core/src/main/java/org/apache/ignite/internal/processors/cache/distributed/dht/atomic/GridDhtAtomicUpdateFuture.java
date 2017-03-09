@@ -49,17 +49,15 @@ class GridDhtAtomicUpdateFuture extends GridDhtAtomicAbstractUpdateFuture {
     GridDhtAtomicUpdateFuture(
         GridCacheContext cctx,
         GridCacheVersion writeVer,
-        GridNearAtomicAbstractUpdateRequest updateReq,
-        GridNearAtomicUpdateResponse updateRes,
-        GridDhtAtomicCache.UpdateReplyClosure completionCb
+        GridNearAtomicAbstractUpdateRequest updateReq
     ) {
-        super(cctx, writeVer, updateReq, updateRes, completionCb);
+        super(cctx, writeVer, updateReq);
 
         mappings = U.newHashMap(updateReq.size());
     }
 
     /** {@inheritDoc} */
-    @Override protected boolean allUpdated() {
+    @Override protected boolean sendAllToDht() {
         return updateCntr == updateReq.size();
     }
 

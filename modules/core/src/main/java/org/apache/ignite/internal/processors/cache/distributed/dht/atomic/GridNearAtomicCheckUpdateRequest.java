@@ -69,7 +69,7 @@ public class GridNearAtomicCheckUpdateRequest extends GridCacheMessage {
     /**
      * @return Future ID on near node.
      */
-    long futureId() {
+    public final long futureId() {
         return futId;
     }
 

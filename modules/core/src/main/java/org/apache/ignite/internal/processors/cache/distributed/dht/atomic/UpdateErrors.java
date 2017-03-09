@@ -49,6 +49,7 @@ public class UpdateErrors implements Message {
 
     /** Update error. */
     @GridDirectTransient
+    @GridToStringInclude
     private IgniteCheckedException err;
 
     /** Serialized update error. */
@@ -59,6 +60,15 @@ public class UpdateErrors implements Message {
      */
     public UpdateErrors() {
         // No-op.
+    }
+
+    /**
+     * @param err Error.
+     */
+    public UpdateErrors(IgniteCheckedException err) {
+        assert err != null;
+
+        this.err = err;
     }
 
     /**
@@ -100,6 +110,10 @@ public class UpdateErrors implements Message {
         err.addSuppressed(e);
     }
 
+    /**
+     * @param keys Keys.
+     * @param e Error.
+     */
     void addFailedKeys(Collection<KeyCacheObject> keys, Throwable e) {
         if (failedKeys == null)
             failedKeys = new ArrayList<>(keys.size());

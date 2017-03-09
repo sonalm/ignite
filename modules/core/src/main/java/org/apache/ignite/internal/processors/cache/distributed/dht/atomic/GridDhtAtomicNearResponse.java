@@ -25,6 +25,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheReturn;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.util.tostring.GridToStringExclude;
+import org.apache.ignite.internal.util.tostring.GridToStringInclude;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
@@ -33,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
 import static org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicAbstractUpdateRequest.DHT_ATOMIC_HAS_RESULT_MASK;
 
 /**
- * TODO IGNITE-4705: no not send mapping if it == affinity?
+ *
  */
 public class GridDhtAtomicNearResponse extends GridCacheMessage {
     /** */
@@ -56,6 +57,7 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     private byte flags;
 
     /** */
+    @GridToStringInclude
     private UpdateErrors errs;
 
     /**
@@ -95,10 +97,10 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
     }
 
     /**
-     * @param errors Errors.
+     * @param errs Errors.
      */
-    void errors(UpdateErrors errors) {
-        this.errs = errors;
+    public void errors(UpdateErrors errs) {
+        this.errs = errs;
     }
 
     /**
@@ -138,14 +140,6 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
      */
     boolean hasResult() {
         return isFlag(DHT_ATOMIC_HAS_RESULT_MASK);
-    }
-
-    /**
-     * @param flag Set or clear.
-     * @param mask Mask.
-     */
-    private void setFlag(boolean flag, int mask) {
-        flags = flag ? (byte)(flags | mask) : (byte)(flags & ~mask);
     }
 
     /**
