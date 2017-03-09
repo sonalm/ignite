@@ -473,13 +473,6 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testPutAllRemapAndPrimaryFailed() throws Exception {
-        // TODO IGNITE-4705.
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
     public void testPutNearNodeFailure() throws Exception {
         startGrids(2);
 
@@ -579,26 +572,59 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testCacheOperations() throws Exception {
-        cacheOperations();
+    public void testCacheOperations0() throws Exception {
+        cacheOperations(0);
     }
 
     /**
      * @throws Exception If failed.
      */
-    public void testCacheOperations_UnstableTopology() throws Exception {
+    public void testCacheOperations_UnstableTopology0() throws Exception {
         blockRebalance = true;
 
-        cacheOperations();
+        cacheOperations(0);
     }
 
     /**
      * @throws Exception If failed.
      */
-    private void cacheOperations() throws Exception {
-        ccfg = cacheConfiguration(1, FULL_SYNC);
+    public void testCacheOperations1() throws Exception {
+        cacheOperations(1);
+    }
 
-        final int SRVS = 2;
+    /**
+     * @throws Exception If failed.
+     */
+    public void testCacheOperations_UnstableTopology1() throws Exception {
+        blockRebalance = true;
+
+        cacheOperations(1);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testCacheOperations2() throws Exception {
+        cacheOperations(2);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testCacheOperations_UnstableTopology2() throws Exception {
+        blockRebalance = true;
+
+        cacheOperations(2);
+    }
+
+    /**
+     * @param backups Number of backups.
+     * @throws Exception If failed.
+     */
+    private void cacheOperations(int backups) throws Exception {
+        ccfg = cacheConfiguration(backups, FULL_SYNC);
+
+        final int SRVS = 4;
 
         startServers(SRVS);
 
@@ -635,13 +661,6 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         }
 
         nearCache.removeAll(rmvAllKeys);
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
-    public void testRemoveAll() throws Exception {
-        // TODO IGNITE-4705 (some keys exist, some not).
     }
 
     /**
@@ -824,6 +843,10 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         return ccfg;
     }
 
+    /**
+     * @param cnt Number of server nodes.
+     * @throws Exception If failed.
+     */
     private void startServers(int cnt) throws Exception {
         startGrids(cnt - 1);
 
@@ -845,7 +868,7 @@ public class IgniteCacheAtomicProtocolTest extends GridCommonAbstractTest {
         /**
          * @param val Value.
          */
-        public SetValueEntryProcessor(Integer val) {
+        SetValueEntryProcessor(Integer val) {
             this.val = val;
         }
 
