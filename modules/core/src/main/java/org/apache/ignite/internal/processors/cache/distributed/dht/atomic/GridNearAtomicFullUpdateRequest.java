@@ -616,7 +616,8 @@ public class GridNearAtomicFullUpdateRequest extends GridNearAtomicAbstractUpdat
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(GridNearAtomicFullUpdateRequest.class, this, "filter", Arrays.toString(filter),
+        return S.toString(GridNearAtomicFullUpdateRequest.class, this,
+            "filter", Arrays.toString(filter),
             "parent", super.toString());
     }
 }

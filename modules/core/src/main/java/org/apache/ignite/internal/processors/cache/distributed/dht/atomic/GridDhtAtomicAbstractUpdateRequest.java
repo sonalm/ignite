@@ -31,6 +31,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheMessage;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
+import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.plugin.extensions.communication.MessageReader;
 import org.apache.ignite.plugin.extensions.communication.MessageWriter;
 import org.jetbrains.annotations.NotNull;
@@ -41,19 +42,19 @@ import org.jetbrains.annotations.Nullable;
  */
 public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessage implements GridCacheDeployable {
     /** Skip store flag bit mask. */
-    static final int DHT_ATOMIC_SKIP_STORE_FLAG_MASK = 0x01;
+    private static final int DHT_ATOMIC_SKIP_STORE_FLAG_MASK = 0x01;
 
     /** Keep binary flag. */
-    static final int DHT_ATOMIC_KEEP_BINARY_FLAG_MASK = 0x02;
+    private static final int DHT_ATOMIC_KEEP_BINARY_FLAG_MASK = 0x02;
 
     /** Near cache key flag. */
-    static final int DHT_ATOMIC_NEAR_FLAG_MASK = 0x04;
+    private static final int DHT_ATOMIC_NEAR_FLAG_MASK = 0x04;
 
     /** */
     static final int DHT_ATOMIC_HAS_RESULT_MASK = 0x08;
 
     /** */
-    static final int DHT_ATOMIC_REPLY_WITHOUT_DELAY = 0x10;
+    private static final int DHT_ATOMIC_REPLY_WITHOUT_DELAY = 0x10;
 
     /** Message index. */
     public static final int CACHE_MSG_IDX = nextIndexId();
@@ -154,6 +155,13 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
      */
     void hasResult(boolean res) {
         setFlag(res, DHT_ATOMIC_HAS_RESULT_MASK);
+    }
+
+    /**
+     * @return Result flag.
+     */
+    private boolean hasResult() {
+        return isFlag(DHT_ATOMIC_HAS_RESULT_MASK);
     }
 
     /**
@@ -412,6 +420,20 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
     @Nullable public abstract Object[] invokeArguments();
 
     /**
+     * @return {@code True} if near cache update request.
+     */
+    protected final boolean near() {
+        return isFlag(DHT_ATOMIC_NEAR_FLAG_MASK);
+    }
+
+    /**
+     * @param near Near cache update flag.
+     */
+    protected final void near(boolean near) {
+        setFlag(near, DHT_ATOMIC_NEAR_FLAG_MASK);
+    }
+
+    /**
      * Sets flag mask.
      *
      * @param flag Set or clear.
@@ -600,5 +622,24 @@ public abstract class GridDhtAtomicAbstractUpdateRequest extends GridCacheMessag
         }
 
         return reader.afterMessageRead(GridDhtAtomicAbstractUpdateRequest.class);
+    }
+
+    /** {@inheritDoc} */
+    @Override public String toString() {
+        StringBuilder flags = new StringBuilder();
+
+        if (skipStore())
+            appendFlag(flags, "skipStore");
+        if (keepBinary())
+            appendFlag(flags, "keepBinary");
+        if (near())
+            appendFlag(flags, "near");
+        if (hasResult())
+            appendFlag(flags, "hasRes");
+        if (replyWithoutDelay())
+            appendFlag(flags, "resNoDelay");
+
+        return S.toString(GridDhtAtomicAbstractUpdateRequest.class, this,
+            "flags", flags.toString());
     }
 }

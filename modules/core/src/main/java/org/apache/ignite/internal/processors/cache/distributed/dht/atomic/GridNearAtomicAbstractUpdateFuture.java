@@ -212,6 +212,9 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
         return null;
     }
 
+    /**
+     * @param req Request.
+     */
     void sendCheckUpdateRequest(GridNearAtomicCheckUpdateRequest req) {
         try {
             cctx.io().send(req.updateRequest().nodeId(), req, cctx.ioPolicy());
@@ -399,7 +402,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      * @param req Request.
      * @param e Error.
      */
-    final void onSendError(GridNearAtomicCheckUpdateRequest req, IgniteCheckedException e) {
+    private void onSendError(GridNearAtomicCheckUpdateRequest req, IgniteCheckedException e) {
         GridNearAtomicUpdateResponse res = new GridNearAtomicUpdateResponse(cctx.cacheId(),
             req.updateRequest().nodeId(),
             req.futureId(),
@@ -460,10 +463,16 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             }
         }
 
+        /**
+         * @return Primary node ID.
+         */
         UUID primaryId() {
             return req.nodeId();
         }
 
+        /**
+         * @param nodes Nodes.
+         */
         void addMapping(List<ClusterNode> nodes) {
             assert req.initMappingLocally();
 
@@ -471,6 +480,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
                 dhtNodes.add(nodes.get(i).id());
         }
 
+        /**
+         * @param cctx Context.
+         * @return Check result.
+         */
         DhtLeftResult checkDhtNodes(GridCacheContext cctx) {
             assert req.initMappingLocally() : req;
 
@@ -519,6 +532,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             if (finished())
                 return null;
 
+            /*
+             * When primary failed, even if primary response is received, it is possible it failed to send
+             * request to backup(s), need remap operation.
+             */
             if (req.fullSync() && !req.nodeFailedResponse()) {
                 req.resetResponse();
 
@@ -530,6 +547,7 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
 
         /**
          * @param nodeId Node ID.
+         * @param res Response.
          * @return Request if need process primary response, {@code null} otherwise.
          */
         @Nullable GridNearAtomicAbstractUpdateRequest processPrimaryResponse(UUID nodeId, GridNearAtomicUpdateResponse res) {
@@ -616,6 +634,10 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
             return finished();
         }
 
+        /**
+         * @param nodeIds Node IDs.
+         * @param cctx Context.
+         */
         private void initDhtNodes(List<UUID> nodeIds, GridCacheContext cctx) {
             assert dhtNodes == null || req.initMappingLocally();
 
@@ -656,13 +678,17 @@ public abstract class GridNearAtomicAbstractUpdateFuture extends GridFutureAdapt
      *
      */
     enum DhtLeftResult {
-        /** */
+        /** All responses and operation result are received. */
         DONE,
 
-        /** */
+        /** Not all responses are received. */
         NOT_DONE,
 
-        /** */
+        /**
+         * All backups failed and response from primary is not required,
+         * in this case in FULL_SYNC mode need send additional request
+         * on primary to ensure FULL_SYNC guarantee.
+         */
         ALL_RCVD_CHECK_PRIMARY
     }
 

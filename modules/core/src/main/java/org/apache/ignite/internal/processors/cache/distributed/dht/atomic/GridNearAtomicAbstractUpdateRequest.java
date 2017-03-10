@@ -85,7 +85,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     /** Task name hash. */
     protected int taskNameHash;
 
-    /** Compressed boolean flags. */
+    /** Compressed boolean flags. Make sure 'toString' is updated when add new flag. */
     @GridToStringExclude
     protected byte flags;
 
@@ -113,6 +113,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
      * @param retval Return value required flag.
      * @param subjId Subject ID.
      * @param taskNameHash Task name hash code.
+     * @param needPrimaryRes {@code True} if near node waits for primary response.
      * @param skipStore Skip write-through to a persistent storage.
      * @param keepBinary Keep binary flag.
      * @param addDepInfo Deployment info flag.
@@ -145,16 +146,12 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
 
         if (needPrimaryRes)
             needPrimaryResponse(true);
-
         if (topLocked)
             topologyLocked(true);
-
         if (retval)
             returnValue(true);
-
         if (skipStore)
             skipStore(true);
-
         if (keepBinary)
             keepBinary(true);
     }
@@ -265,6 +262,9 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return false;
     }
 
+    /**
+     *
+     */
     void resetResponse() {
         this.res = null;
     }
@@ -276,6 +276,9 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
         return res;
     }
 
+    /**
+     * @return {@code True} if received notification about primary fail.
+     */
     boolean nodeFailedResponse() {
         return res != null && res.nodeLeftResponse();
     }
@@ -290,7 +293,7 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
     /**
      * @param val {@code True} if topology is locked on near node.
      */
-    final void topologyLocked(boolean val) {
+    private void topologyLocked(boolean val) {
         setFlag(val, TOP_LOCKED_FLAG_MASK);
     }
 
@@ -602,7 +605,20 @@ public abstract class GridNearAtomicAbstractUpdateRequest extends GridCacheMessa
 
     /** {@inheritDoc} */
     @Override public String toString() {
+        StringBuilder flags = new StringBuilder();
+
+        if (needPrimaryResponse())
+            appendFlag(flags, "needRes");
+        if (topologyLocked())
+            appendFlag(flags, "topLock");
+        if (skipStore())
+            appendFlag(flags, "skipStore");
+        if (keepBinary())
+            appendFlag(flags, "keepBinary");
+        if (returnValue())
+            appendFlag(flags, "retVal");
+
         return S.toString(GridNearAtomicAbstractUpdateRequest.class, this,
-            "flags", "needRes=" + isFlag(NEED_PRIMARY_RES_FLAG_MASK) + "|retVal=" + isFlag(RET_VAL_FLAG_MASK));
+            "flags", flags.toString());
     }
 }

@@ -293,20 +293,6 @@ public class GridDhtAtomicSingleUpdateRequest extends GridDhtAtomicAbstractUpdat
         return null;
     }
 
-    /**
-     * @return {@code True} if near cache update request.
-     */
-    private boolean near() {
-        return isFlag(DHT_ATOMIC_NEAR_FLAG_MASK);
-    }
-
-    /**
-     * @param near Near cache update flag.
-     */
-    private void near(boolean near) {
-        setFlag(near, DHT_ATOMIC_NEAR_FLAG_MASK);
-    }
-
     /** {@inheritDoc} */
     @Override public void prepareMarshal(GridCacheSharedContext ctx) throws IgniteCheckedException {
         super.prepareMarshal(ctx);

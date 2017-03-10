@@ -303,8 +303,12 @@ public class GridDhtAtomicNearResponse extends GridCacheMessage {
 
     /** {@inheritDoc} */
     @Override public String toString() {
+        StringBuilder flags = new StringBuilder();
+
+        if (hasResult())
+            appendFlag(flags, "hasRes");
+
         return S.toString(GridDhtAtomicNearResponse.class, this,
-            "flags",
-            "res=" + isFlag(DHT_ATOMIC_HAS_RESULT_MASK));
+            "flags", flags.toString());
     }
 }
